@@ -1,0 +1,78 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>模块笔记 · MODULARITY</title>
+<meta name="description" content="模块笔记 MODULARITY —— 关于 CSS 布局、JavaScript 原理、网络缓存、TypeScript 与工程化实践的深度笔记。">
+<link rel="icon" href="assets/images/logo.png">
+<link rel="stylesheet" href="assets/css/style.css?v=15">
+</head>
+<body>
+<div class="progress-bar" id="progressBar" style="width: 0%;"></div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <button class="icon-btn menu-btn" id="menuBtn" aria-label="打开目录" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg>
+    </button>
+
+    <a class="brand" href="#/" aria-label="模块笔记 首页">
+      <span class="brand-mark"><img src="assets/images/logo.png" alt="模块笔记 MODULARITY logo" width="32" height="32"></span>
+      <span class="brand-text">模块笔记<em>MODULARITY</em></span>
+    </a>
+
+    <div class="topbar-right">
+      <label class="search" for="searchInput">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"></circle><path d="M16 16l4.5 4.5"></path></svg>
+        <input id="searchInput" type="search" placeholder="搜索文章、标签…" autocomplete="off" spellcheck="false">
+        <kbd>/</kbd>
+      </label>
+      <button class="icon-btn" id="themeBtn" aria-label="切换主题" title="日间模式">
+        <svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"></circle><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.1 5.1l1.7 1.7M17.2 17.2l1.7 1.7M18.9 5.1l-1.7 1.7M6.8 17.2l-1.7 1.7"></path></svg>
+        <svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"></path></svg>
+        <svg class="i-eye" viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+      </button>
+      <button class="btn primary topbar-write" id="writeBtn" type="button">＋ 写文章</button>
+      <button class="icon-btn topbar-mine" id="mineBtn" type="button" aria-label="我的编辑" title="我的编辑：查看 / 修改 / 删除我发布的内容">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4l10-10-4-4L4 16v4z"></path><path d="M13.5 6.5l4 4"></path><path d="M14 5l5 5"></path></svg>
+      </button>
+      <button class="btn ghost topbar-auth" id="authBtn" type="button">登录 / 注册</button>
+      <a class="gh-link" href="#/about">关于</a>
+    </div>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <nav class="sidebar-inner" id="sidebarNav" aria-label="文章目录"><div class="sidebar-group"><div class="sidebar-title">导航</div><a class="nav-item" href="#/"><span class="idx">§</span>文章首页</a><a class="nav-item" href="#/about"><span class="idx">?</span>关于本站</a></div><div class="sidebar-group"><div class="sidebar-title">电力电子</div><a class="nav-item" href="#/post/power-electronics-review" title="电力电子技术复习提纲：核心公式与常考点"><span class="idx">01</span><span>电力电子技术复习提纲：核心公式与常考点</span></a></div><div class="sidebar-group"><div class="sidebar-title">电力系统</div><a class="nav-item" href="#/post/power-system-analysis-review" title="电力系统分析考研笔记：全书重点、公式与题型速查"><span class="idx">01</span><span>电力系统分析考研笔记：全书重点、公式与题型速查</span></a></div><div class="sidebar-group"><div class="sidebar-title">CSS</div><a class="nav-item" href="#/post/css-layout-modern" title="现代 CSS 布局：Grid 与 Flexbox 的取舍"><span class="idx">01</span><span>现代 CSS 布局：Grid 与 Flexbox 的取舍</span></a></div><div class="sidebar-group"><div class="sidebar-title">JavaScript</div><a class="nav-item" href="#/post/js-event-loop" title="彻底理解 JavaScript 事件循环"><span class="idx">01</span><span>彻底理解 JavaScript 事件循环</span></a></div><div class="sidebar-group"><div class="sidebar-title">网络</div><a class="nav-item" href="#/post/http-cache-strategy" title="HTTP 缓存策略完全指南"><span class="idx">01</span><span>HTTP 缓存策略完全指南</span></a></div><div class="sidebar-group"><div class="sidebar-title">TypeScript</div><a class="nav-item" href="#/post/typescript-generics" title="TypeScript 泛型：从入门到实用"><span class="idx">01</span><span>TypeScript 泛型：从入门到实用</span></a></div><div class="sidebar-group"><div class="sidebar-title">性能</div><a class="nav-item" href="#/post/web-performance-checklist" title="Web 性能优化清单（2026 版）"><span class="idx">01</span><span>Web 性能优化清单（2026 版）</span></a></div><div class="sidebar-group"><div class="sidebar-title">工程化</div><a class="nav-item" href="#/post/git-workflow" title="团队 Git 工作流实践"><span class="idx">01</span><span>团队 Git 工作流实践</span></a></div></nav>
+    <div class="sidebar-foot">
+      <span class="status-dot"></span>
+      <span>共 <b id="postCount">9</b> 篇 · 持续更新</span>
+    </div>
+  </aside>
+  <div class="scrim" id="scrim" hidden=""></div>
+
+  <main class="main" id="view" tabindex="-1"><div class="article-layout"><article><div class="breadcrumb"><a href="#/">首页</a><span class="sep">/</span><a href="#/" data-cat="原创">原创</a></div><div class="prose" id="prose">啊我发v但是并不</div><nav class="pager"><a href="#/post/power-electronics-review"><span class="dir">← 上一篇</span><span class="ttl">电力电子技术复习提纲：核心公式与常考点</span></a><a class="next" href="#/"><span class="dir">目录 →</span><span class="ttl">浏览全部笔记</span></a></nav></article></div></main>
+</div>
+
+<footer class="footer">
+  <div class="footer-inner">
+    <span>© 2026 模块笔记 · 静态站点</span>
+    <span class="footer-meta" id="footerBuild">◇ v2.0 · 8 notes</span>
+  </div>
+</footer>
+
+<script src="assets/js/posts.js"></script>
+<script src="assets/js/posts/power-system-analysis-review.js?v=2"></script>
+<script src="assets/js/posts/power-electronics-review.js?v=2"></script>
+<script src="assets/js/posts/css-layout-modern.js"></script>
+<script src="assets/js/posts/js-event-loop.js"></script>
+<script src="assets/js/posts/http-cache-strategy.js"></script>
+<script src="assets/js/posts/typescript-generics.js"></script>
+<script src="assets/js/posts/web-performance-checklist.js"></script>
+<script src="assets/js/posts/git-workflow.js"></script>
+<script src="assets/js/highlight.js"></script>
+<script src="assets/js/community.js?v=11"></script>
+<script src="assets/js/app.js?v=14"></script>
+
+
+</body></html>
