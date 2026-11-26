@@ -3,9 +3,9 @@
 一个零依赖、零构建的静态博客 / 文档站点。只使用原生 HTML、CSS 与 JavaScript，
 部署时直接上传静态文件即可。
 
-- 线上地址：https://37m0ad6fzplrntl2fgt.traesite.cn
-- 站点 ID：`37m0ad6fzplrntl2fgt`
-- 首次部署 ID：`dep_6b078a471184075ccc91f4b6`
+- 线上地址：https://leeyehuai.github.io/modularity/
+- 前端仓库：https://github.com/leeyehuai/modularity
+- 后端：Cloudflare Worker（notes-api）+ GitHub Issues 数据库
 
 ## 功能
 
