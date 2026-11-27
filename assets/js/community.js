@@ -387,6 +387,13 @@
       post.isUserPost = true;
       post.isMine = true;
       post.author = state.name;
+      /* 补上 date 字段，避免前端显示 Invalid Date */
+      if (!post.date) {
+        var d = new Date();
+        post.date = d.getFullYear() + '-' +
+          String(d.getMonth() + 1).padStart(2, '0') + '-' +
+          String(d.getDate()).padStart(2, '0');
+      }
       /* 立即把刚发的文章写入本地缓存列表，不用等 refreshPosts 回来 */
       upsertRemoteCache(post);
       await refreshPosts();
@@ -838,6 +845,8 @@
     },
     refreshPosts: refreshPosts,
     loadPosts: function () { return state.usingRemote ? state.remotePosts : loadLocalPosts(); },
+    login: login,
+    register: register,
     savePost: savePost,
     removePost: removePost,
     openEditor: openEditor,

@@ -1,0 +1,453 @@
+/* ============================================================
+ * 启动封面 Splash v3 —— 浅色梦幻 + 立体玻璃方块 + 极光 + 星尘
+ * 1. 浅色渐变底色（淡紫→淡蓝→淡粉）+ 三团缓慢漂移的极光光斑
+ * 2. 随机漂浮星尘
+ * 3. 四个高立体玻璃方块图标从四周向中心靠拢（每个方块自带动态小动画）
+ * 4. 中央双层呼吸光环环绕图标组
+ * 5. 「模块学习」流光渐变标题自左向右浮现 + 副标题
+ * 6. 底部呼吸圆点「正在唤醒模块」
+ * 7. 动画结束 → 静态停留 2 秒 → 由 splash.js 决定跳转
+ * ========================================================== */
+
+/* 封面期间把 body 垫成浅色，与封面底色保持一致，避免主站深色闪入 */
+body:has(.splash) { background: #eef3ff; }
+
+/* 已登录用户（head 内联脚本打标）：封面完全不渲染，主界面直接显示 */
+html[data-skip-splash="1"] .splash { display: none; }
+
+/* 游客模式（?guest=1）：主界面柔和淡入，从半透明 + 轻微上移慢慢显现，避免从登录页直接闪切 */
+html[data-soft-enter="1"] body {
+  animation: softEnter .75s cubic-bezier(.22,.8,.3,1) both;
+}
+@keyframes softEnter {
+  from { opacity: 0; transform: translateY(14px) scale(.995); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(1200px 700px at 50% -10%, rgba(186, 199, 255, .55), transparent 60%),
+    linear-gradient(180deg, #f3f6ff 0%, #e7ecff 45%, #fde9f3 100%);
+  /* 不透明起步：避免主界面先闪一下再被封面盖住 */
+  opacity: 1;
+}
+
+/* ---------- 极光光斑（浅色柔和版） ---------- */
+.splash-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.aurora {
+  position: absolute;
+  width: 55vmax;
+  height: 55vmax;
+  border-radius: 50%;
+  filter: blur(70px);
+  opacity: .5;
+  mix-blend-mode: multiply;
+  will-change: transform;
+}
+.aurora.a1 {
+  top: -15vmax; left: -10vmax;
+  background: radial-gradient(circle at center, #a8bcff 0%, transparent 65%);
+  animation: auroraDrift1 14s ease-in-out infinite alternate;
+}
+.aurora.a2 {
+  bottom: -20vmax; right: -12vmax;
+  background: radial-gradient(circle at center, #ffc2e0 0%, transparent 65%);
+  animation: auroraDrift2 17s ease-in-out infinite alternate;
+}
+.aurora.a3 {
+  top: 30%; left: 50%;
+  width: 40vmax; height: 40vmax;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at center, #a0e3ff 0%, transparent 65%);
+  opacity: .4;
+  animation: auroraDrift3 20s ease-in-out infinite alternate;
+}
+@keyframes auroraDrift1 {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to   { transform: translate(8vmax, 6vmax) rotate(25deg); }
+}
+@keyframes auroraDrift2 {
+  from { transform: translate(0, 0) rotate(0deg); }
+  to   { transform: translate(-6vmax, -8vmax) rotate(-20deg); }
+}
+@keyframes auroraDrift3 {
+  from { transform: translate(-50%, 0) scale(1); }
+  to   { transform: translate(-50%, 4vmax) scale(1.15); }
+}
+
+/* ---------- 星尘 ---------- */
+.stars {
+  position: absolute;
+  inset: 0;
+}
+.stars i {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  background: #5b6ddb;
+  border-radius: 50%;
+  opacity: 0;
+  animation: starTwinkle linear infinite;
+}
+@keyframes starTwinkle {
+  0%   { opacity: 0; transform: translateY(0) scale(.6); }
+  50%  { opacity: .9; transform: translateY(-20px) scale(1); }
+  100% { opacity: 0; transform: translateY(-40px) scale(.6); }
+}
+
+/* ---------- 中央舞台 ---------- */
+.splash-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  z-index: 1;
+}
+
+/* ---------- 呼吸光环（环绕图标组） ---------- */
+.splash-grid-wrap {
+  position: relative;
+  padding: 36px;
+}
+.ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(91, 109, 219, .18);
+  pointer-events: none;
+}
+.ring-1 {
+  animation: ringBreath1 3.2s ease-in-out infinite;
+}
+.ring-2 {
+  inset: 20px;
+  border-color: rgba(111, 135, 245, .35);
+  animation: ringBreath2 3.2s ease-in-out infinite;
+}
+@keyframes ringBreath1 {
+  0%, 100% { transform: scale(1); opacity: .5; }
+  50%      { transform: scale(1.06); opacity: 1; }
+}
+@keyframes ringBreath2 {
+  0%, 100% { transform: scale(1); opacity: .4; }
+  50%      { transform: scale(1.1); opacity: .9; }
+}
+
+/* ---------- 四方块图标组（高立体玻璃） ---------- */
+.splash-grid {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, 132px);
+  grid-template-rows: repeat(2, 132px);
+  gap: 30px;
+}
+
+.sq {
+  width: 132px;
+  height: 132px;
+  border-radius: 30px;
+  /* 顶部亮 → 底部略深的玻璃感渐变，让方块有「厚度」 */
+  background: linear-gradient(160deg, #ffffff 0%, #eef2ff 55%, #dfe6ff 100%);
+  border: 1px solid rgba(255, 255, 255, .9);
+  /* 多层阴影：环境光 + 顶部内高光 + 底部内阴影 + 远距离投影，营造浮起的立体感 */
+  box-shadow:
+    0 30px 60px -18px rgba(91, 109, 219, .35),
+    0 12px 24px -8px rgba(91, 109, 219, .22),
+    inset 0 2px 0 rgba(255, 255, 255, 1),
+    inset 0 -2px 6px rgba(91, 109, 219, .12),
+    inset 2px 0 4px -2px rgba(255, 255, 255, .9),
+    inset -2px 0 4px -2px rgba(91, 109, 219, .08);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  color: #3b5bdb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  opacity: 0;
+  /* 轻微 3D 倾斜，让方块像斜放的玻璃牌 */
+  transform-style: preserve-3d;
+}
+.sq-inner { width: 62%; height: 62%; }
+.sq-inner svg { width: 100%; height: 100%; display: block; }
+
+/* 四个方块分别从四角飞入 */
+.sq-tl { animation: sqComeTl .9s cubic-bezier(.2,.7,.25,1) .35s forwards; }
+.sq-tr { animation: sqComeTr .9s cubic-bezier(.2,.7,.25,1) .35s forwards; }
+.sq-bl { animation: sqComeBl .9s cubic-bezier(.2,.7,.25,1) .35s forwards; }
+.sq-br {
+  animation: sqComeBr .9s cubic-bezier(.2,.7,.25,1) .35s forwards,
+             bulbPulse 1.8s ease-in-out 2.4s infinite;
+}
+
+/* 四个方块：从四角分开飞入 → 靠拢 → 轻微过冲后「镶嵌」锁定到位 */
+@keyframes sqComeTl {
+  0%   { opacity: 0; transform: translate(-130px, -130px) scale(.5) rotate(-16deg); }
+  60%  { opacity: 1; transform: translate(0, 0) scale(1.06) rotate(2deg); }
+  80%  { transform: translate(2px, 2px) scale(.98) rotate(-1deg); }
+  100% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0); }
+}
+@keyframes sqComeTr {
+  0%   { opacity: 0; transform: translate(130px, -130px) scale(.5) rotate(16deg); }
+  60%  { opacity: 1; transform: translate(0, 0) scale(1.06) rotate(-2deg); }
+  80%  { transform: translate(-2px, 2px) scale(.98) rotate(1deg); }
+  100% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0); }
+}
+@keyframes sqComeBl {
+  0%   { opacity: 0; transform: translate(-130px, 130px) scale(.5) rotate(16deg); }
+  60%  { opacity: 1; transform: translate(0, 0) scale(1.06) rotate(-2deg); }
+  80%  { transform: translate(2px, -2px) scale(.98) rotate(1deg); }
+  100% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0); }
+}
+@keyframes sqComeBr {
+  0%   { opacity: 0; transform: translate(130px, 130px) scale(.5) rotate(-16deg); }
+  60%  { opacity: 1; transform: translate(0, 0) scale(1.06) rotate(2deg); }
+  80%  { transform: translate(-2px, -2px) scale(.98) rotate(-1deg); }
+  100% { opacity: 1; transform: translate(0, 0) scale(1) rotate(0); }
+}
+
+/* 左上：立体动漫书 —— 多页叠放 + 一页从右向左连页翻动 */
+.sq-tl .book-page {
+  transform-origin: 26px 23px;
+  transform: rotateY(-90deg);
+  animation: pageFlip 1.6s cubic-bezier(.4,.1,.3,1) 1.15s forwards;
+}
+@keyframes pageFlip {
+  0%   { transform: rotateY(-90deg); opacity: .3; }
+  50%  { transform: rotateY(0deg);  opacity: 1; }
+  100% { transform: rotateY(0deg); opacity: 1; }
+}
+.sq-tl .book-line { opacity: 0; }
+.sq-tl .l1 { animation: lineFade .4s ease-out 1.5s forwards; }
+.sq-tl .l2 { animation: lineFade .4s ease-out 1.7s forwards; }
+.sq-tl .l3 { animation: lineFade .4s ease-out 1.9s forwards; }
+@keyframes lineFade {
+  to { opacity: 1; }
+}
+
+/* 右上：火箭斜向上发射 —— 整体抖动 + 火焰跳动 + 烟雾冒出 */
+.sq-tr .rocket {
+  transform-origin: 24px 24px;
+  animation: rocketShake 1.2s ease-in-out 1.15s;
+}
+@keyframes rocketShake {
+  0%, 100% { transform: translate(0, 0) rotate(0deg); }
+  20%      { transform: translate(1px, -2px) rotate(-2deg); }
+  40%      { transform: translate(-1px, -4px) rotate(2deg); }
+  60%      { transform: translate(1px, -6px) rotate(-1deg); }
+  80%      { transform: translate(0, -7px) rotate(0deg); }
+}
+.sq-tr .rocket-flame {
+  transform-origin: 24px 33px;
+  animation: flameFlicker .35s ease-in-out 1.35s infinite;
+}
+.sq-tr .f2 { animation-delay: 1.5s; }
+@keyframes flameFlicker {
+  0%, 100% { transform: scaleY(1); opacity: 1; }
+  50%      { transform: scaleY(1.4); opacity: .7; }
+}
+.sq-tr .rocket-smoke { opacity: 0; }
+.sq-tr .s1 { animation: smokeOut .8s ease-out 1.5s forwards; }
+.sq-tr .s2 { animation: smokeOut .8s ease-out 1.65s forwards; }
+.sq-tr .s3 { animation: smokeOut  .9s ease-out 1.8s forwards; }
+@keyframes smokeOut {
+  0%   { opacity: 0; transform: translateY(0) scale(.5); }
+  50%  { opacity: .8; }
+  100% { opacity: 0; transform: translateY(-10px) scale(1.4); }
+}
+
+/* 左下：螺旋楼梯 —— 白色踏步自下而上逐级浮现，扶手曲线随后描绘 */
+.sq-bl .ladder-step { opacity: 0; }
+.sq-bl .st1 { animation: stepRise .4s ease-out 1.15s forwards; }
+.sq-bl .st2 { animation: stepRise .4s ease-out 1.35s forwards; }
+.sq-bl .st3 { animation: stepRise .4s ease-out 1.55s forwards; }
+.sq-bl .st4 { animation: stepRise .4s ease-out 1.75s forwards; }
+.sq-bl .st5 { animation: stepRise .4s ease-out 1.95s forwards; }
+.sq-bl .ladder-rail {
+  stroke-dasharray: 34;
+  stroke-dashoffset: 34;
+  animation: railDraw .9s ease-out 2.0s forwards;
+}
+.sq-bl .ladder-bar { opacity: 0; }
+.sq-bl .b1 { animation: barPop .3s ease-out 2.4s forwards; }
+.sq-bl .b2 { animation: barPop .3s ease-out 2.55s forwards; }
+.sq-bl .b3 { animation: barPop .3s ease-out 2.7s forwards; }
+.sq-bl .b4 { animation: barPop .3s ease-out 2.85s forwards; }
+.sq-bl .ladder-knob { animation: knobPulse 1.4s ease-in-out 2.9s infinite; transform-origin: 30.5px 9.5px; }
+@keyframes stepRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes railDraw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes barPop {
+  from { opacity: 0; transform: scaleY(0); }
+  to   { opacity: 1; transform: scaleY(1); }
+}
+@keyframes knobPulse {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.4); }
+}
+
+/* 右下：立体旋转灯泡 —— 整体绕中心旋转 + 玻璃泡亮灯 + 光线闪烁 */
+.sq-br .bulb {
+  transform-origin: 24px 24px;
+  animation: bulbSpin 2.4s ease-in-out 1.15s;
+}
+@keyframes bulbSpin {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(-12deg); }
+  60%  { transform: rotate(10deg); }
+  100% { transform: rotate(0deg); }
+}
+.sq-br .bulb-glass {
+  fill: #fff7d6;
+  animation: bulbLight .9s ease-out 1.9s forwards;
+}
+@keyframes bulbLight {
+  from { fill: #ffffff; filter: drop-shadow(0 0 0 rgba(245, 166, 35, 0)); }
+  to   { fill: #fff7d6; filter: drop-shadow(0 0 10px rgba(245, 166, 35, .8)); }
+}
+.sq-br .bulb-ray { opacity: 0; }
+.sq-br .r1 { animation: rayBlink .5s ease-out 2.2s forwards; }
+.sq-br .r2 { animation: rayBlink .5s ease-out 2.4s forwards; }
+.sq-br .r3 { animation: rayBlink .5s ease-out 2.6s forwards; }
+@keyframes rayBlink {
+  from { opacity: 0; transform: scale(.4); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes bulbPulse {
+  0%, 100% {
+    box-shadow:
+      0 30px 60px -18px rgba(91, 109, 219, .35),
+      0 12px 24px -8px rgba(91, 109, 219, .22),
+      inset 0 2px 0 rgba(255, 255, 255, 1),
+      inset 0 -2px 6px rgba(91, 109, 219, .12),
+      0 0 0 0 rgba(255, 196, 66, 0);
+    color: #3b5bdb;
+  }
+  50% {
+    box-shadow:
+      0 30px 60px -18px rgba(91, 109, 219, .35),
+      0 12px 24px -8px rgba(91, 109, 219, .22),
+      inset 0 2px 0 rgba(255, 255, 255, 1),
+      inset 0 -2px 6px rgba(91, 109, 219, .12),
+      0 0 44px 6px rgba(255, 196, 66, .55);
+    color: #f5a623;
+  }
+}
+
+/* ---------- 标题：流光渐变 + 自左向右浮现 ---------- */
+.splash-title {
+  display: flex;
+  gap: 14px;
+  font-size: clamp(42px, 7vw, 72px);
+  font-weight: 800;
+  letter-spacing: .1em;
+  background: linear-gradient(90deg, #3b5bdb 0%, #6f87f5 30%, #c26cd8 55%, #6f87f5 80%, #3b5bdb 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  animation: titleShimmer 5s linear infinite;
+}
+@keyframes titleShimmer {
+  to { background-position: -200% 0; }
+}
+.splash-title .ch {
+  display: inline-block;
+  opacity: 0;
+  transform: translateX(-40px) rotate(-6deg);
+  animation: chIn .7s cubic-bezier(.2,.7,.25,1) forwards;
+}
+.splash-title .ch:nth-child(1) { animation-delay: 1.9s; }
+.splash-title .ch:nth-child(2) { animation-delay: 2.05s; }
+.splash-title .ch:nth-child(3) { animation-delay: 2.2s; }
+.splash-title .ch:nth-child(4) { animation-delay: 2.35s; }
+@keyframes chIn {
+  to { opacity: 1; transform: translateX(0) rotate(0); }
+}
+
+/* ---------- 副标题 ---------- */
+.splash-sub {
+  font-size: 13px;
+  letter-spacing: .35em;
+  color: rgba(70, 90, 160, .65);
+  opacity: 0;
+  animation: subIn .8s ease-out 2.8s forwards;
+}
+@keyframes subIn {
+  to { opacity: 1; }
+}
+
+/* ---------- 底部呼吸圆点 ---------- */
+.splash-loading {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  letter-spacing: .2em;
+  color: rgba(70, 90, 160, .6);
+  opacity: 0;
+  animation: subIn .8s ease-out 1s forwards;
+}
+.splash-loading .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6f87f5;
+  animation: dotBounce 1.4s ease-in-out infinite;
+}
+.splash-loading .dot:nth-child(2) { animation-delay: .18s; background: #b985e8; }
+.splash-loading .dot:nth-child(3) { animation-delay: .36s; background: #f5a6c8; }
+@keyframes dotBounce {
+  0%, 100% { transform: translateY(0); opacity: .4; }
+  50%      { transform: translateY(-6px); opacity: 1; }
+}
+
+/* ---------- 整体淡入 / 淡出 ---------- */
+@keyframes splashFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.splash.splash-out {
+  animation: splashFadeOut .8s ease-in forwards;
+}
+@keyframes splashFadeOut {
+  to { opacity: 0; visibility: hidden; }
+}
+
+/* 动画结束后整体静止，等待 2 秒由 JS 跳转 */
+.splash.splash-settled {
+  /* 这里不打断进行中的动画；settled 仅作为 JS 计时的标记 */
+}
+
+@media (max-width: 520px) {
+  .splash-grid {
+    grid-template-columns: repeat(2, 96px);
+    grid-template-rows: repeat(2, 96px);
+    gap: 22px;
+  }
+  .sq { width: 96px; height: 96px; border-radius: 24px; }
+  .splash-grid-wrap { padding: 26px; }
+  .splash-stage { gap: 32px; }
+  .splash-sub { letter-spacing: .2em; font-size: 11px; }
+}

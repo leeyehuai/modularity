@@ -81,6 +81,13 @@
   }
   var DATE_FMT = { year: 'numeric', month: '2-digit', day: '2-digit' };
   function fmtDate(d) {
+    if (!d) {
+      /* date 为空时用当前时间兜底，避免 Invalid Date */
+      var now = new Date();
+      return now.getFullYear() + '-' +
+        String(now.getMonth() + 1).padStart(2, '0') + '-' +
+        String(now.getDate()).padStart(2, '0');
+    }
     try {
       return new Date(d + 'T00:00:00').toLocaleDateString('zh-CN', DATE_FMT).replace(/\//g, '-');
     } catch (e) { return d; }
@@ -295,17 +302,16 @@
       '</div>';
   }
 
-  /* 快捷删除手势：PC 右键 / 手机右滑 → 显现删除按钮；删除按钮点击 → 二次确认后删除 */
+  /* 快捷删除手势：hover 卡片显现删除按钮；点击即删（无需确认） */
   function bindQuickDeleteGestures() {
     var cards = el.view.querySelectorAll('.card-quick-delete');
     cards.forEach(function (btn) {
-      /* 点击删除按钮 */
+      /* 点击删除按钮：直接删除，不弹确认框 */
       btn.addEventListener('click', async function (e) {
         e.stopPropagation();
         var slug = btn.getAttribute('data-slug');
         var post = bySlug(slug);
         if (!post) return;
-        if (!window.confirm('确定删除《' + post.title + '》？此操作会同时从云端移除。')) return;
         try {
           await FN.removePost(post);
           refreshPosts();
@@ -667,9 +673,19 @@
     transBtn.addEventListener('click', function () { window.FNTranslator.open(); });
   }
 
+  /* 游客模式：URL 带 ?guest=1，只允许浏览，不能编辑 */
+  function isGuest() { return /[?&]guest=1/.test(location.search); }
+  function guestBlockToast() {
+    showSyncToast('游客模式：只能浏览，登录后才能发文、编辑或管理内容。', '去登录', function () {
+      window.location.href = 'auth.html';
+    });
+  }
+
   var writeBtn = document.getElementById('writeBtn');
   if (writeBtn && FN) {
     writeBtn.addEventListener('click', function () {
+      /* 游客模式 → 拦截，提示去登录 */
+      if (isGuest()) { guestBlockToast(); return; }
       /* 远端模式下未登录 → 先弹登录框 */
       if (FN.isRemote() && !FN.isLoggedIn()) {
         FN.openAuthModal('login', function () {
@@ -693,6 +709,8 @@
   var mineBtn = document.getElementById('mineBtn');
   if (mineBtn && FN) {
     mineBtn.addEventListener('click', function () {
+      /* 游客模式 → 拦截 */
+      if (isGuest()) { guestBlockToast(); return; }
       if (FN.isRemote() && !FN.isLoggedIn()) {
         FN.openAuthModal('login', function () {
           refreshPosts();
@@ -905,12 +923,9 @@
       };
     } else {
       btn.innerHTML = '登录 / 注册';
+      /* 登录/注册改为独立页面 auth.html（弹窗保留给「发文前未登录」等场景做兜底） */
       btn.onclick = function () {
-        FN.openAuthModal('login', function () {
-          refreshPosts();
-          route();
-          refreshAuthUI();
-        });
+        window.location.href = 'auth.html';
       };
       btn.ondblclick = null;
       btn.oncontextmenu = null;
@@ -944,10 +959,10 @@
       closeUserMenu();
       if (act === 'settings') openProfileModal();
       else if (act === 'logout') {
+        /* 退出登录 → 清掉会话后跳到独立登录/注册页 */
         FN.logout();
-        refreshPosts();
-        route();
-        refreshAuthUI();
+        window.location.replace('auth.html');
+        return;
       }
     });
   }

@@ -469,7 +469,7 @@ html[data-theme="dark"] .brand-mark img {
 }
 .post-card:hover .arrow { transform: translateX(3px); }
 
-/* 快捷删除按钮：默认隐藏在卡片右侧外沿；右键/右滑后 .on 显现 */
+/* 快捷删除按钮：默认隐藏在卡片右上角；hover 卡片时显现 */
 .card-quick-delete {
   position: absolute;
   top: 12px;
@@ -490,6 +490,13 @@ html[data-theme="dark"] .brand-mark img {
   pointer-events: none;
   z-index: 5;
 }
+/* hover 卡片时显示右上角垃圾桶 */
+.post-card:hover .card-quick-delete {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+/* 右键/右滑手动显现（移动端兼容） */
 .card-quick-delete.on {
   opacity: 1;
   transform: scale(1);
