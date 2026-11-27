@@ -232,30 +232,12 @@
       /* 第一篇：头条大图卡（仅在无筛选时突出） */
       if (!state.q && state.tag === '全部' && !state.major && featured) {
         var p = featured;
-        html += '<a class="post-card post-card-featured" href="#/post/' + esc(p.slug) + '">' +
-          '<div class="card-top">' +
-          '<span class="cat-badge">★ 最新发布 · ' + esc(majorOf(p)) + ' / ' + esc(p.category) + '</span>' +
-          '<span class="card-meta">' + fmtDate(p.date) + '</span>' +
-          '</div>' +
-          '<h3>' + esc(p.title) + '</h3>' +
-          '<p>' + esc(p.desc) + '</p>' +
-          '<div class="card-foot"><span>' + p.tags.slice(0, 3).map(function (t) { return '#' + esc(t); }).join(' ') + '</span>' +
-          '<span class="arrow">阅读全文 →</span></div>' +
-          '</a>';
+        html += renderPostCard(p, true);
       }
       var rest = (!state.q && state.tag === '全部' && !state.major) ? list.slice(1) : list;
       if (rest.length) {
         html += '<div class="post-grid">' + rest.map(function (p) {
-          return '<a class="post-card" href="#/post/' + esc(p.slug) + '">' +
-            '<div class="card-top">' +
-            '<span class="cat-badge">' + esc(majorOf(p)) + ' · ' + esc(p.category) + '</span>' +
-            '<span class="card-meta">' + fmtDate(p.date) + '</span>' +
-            '</div>' +
-            '<h3>' + esc(p.title) + '</h3>' +
-            '<p>' + esc(p.desc) + '</p>' +
-            '<div class="card-foot"><span>' + p.tags.slice(0, 2).map(function (t) { return '#' + esc(t); }).join(' ') + '</span>' +
-            '<span class="arrow">→</span></div>' +
-            '</a>';
+          return renderPostCard(p, false);
         }).join('') + '</div>';
       }
     }
@@ -278,9 +260,108 @@
         renderHome(true);
       });
     });
+    /* 卡片点击跳转（原 <a> 已换成 <div>，统一用 JS 跳转） */
+    el.view.querySelectorAll('.post-card[data-slug]').forEach(function (card) {
+      card.addEventListener('click', function (e) {
+        /* 点在删除按钮上不触发跳转 */
+        if (e.target.closest && e.target.closest('.card-quick-delete')) return;
+        location.hash = '#/post/' + card.getAttribute('data-slug');
+      });
+    });
+    bindQuickDeleteGestures();
     observeEntries();
     document.title = 'MODULARITY · 模块笔记';
     if (!keepScroll) resetScroll();
+  }
+
+  /* 渲染一张文章卡：静态文章只读；自己的云端文章附加速捷删除按钮 */
+  function renderPostCard(p, featured) {
+    var cls = 'post-card' + (featured ? ' post-card-featured' : '');
+    var head = featured
+      ? '<span class="cat-badge">★ 最新发布 · ' + esc(majorOf(p)) + ' / ' + esc(p.category) + '</span>'
+      : '<span class="cat-badge">' + esc(majorOf(p)) + ' · ' + esc(p.category) + '</span>';
+    var tags = p.tags.slice(0, featured ? 3 : 2).map(function (t) { return '#' + esc(t); }).join(' ');
+    var arrow = featured ? '<span class="arrow">阅读全文 →</span>' : '<span class="arrow">→</span>';
+    var quickDelete = isMine(p)
+      ? '<button type="button" class="card-quick-delete" data-slug="' + esc(p.slug) + '" title="快捷删除本文">🗑</button>'
+      : '';
+    return '<div class="' + cls + '" data-slug="' + esc(p.slug) + '">' +
+      quickDelete +
+      '<div class="card-top">' + head +
+      '<span class="card-meta">' + fmtDate(p.date) + '</span></div>' +
+      '<h3>' + esc(p.title) + '</h3>' +
+      '<p>' + esc(p.desc) + '</p>' +
+      '<div class="card-foot"><span>' + tags + '</span>' + arrow + '</div>' +
+      '</div>';
+  }
+
+  /* 快捷删除手势：PC 右键 / 手机右滑 → 显现删除按钮；删除按钮点击 → 二次确认后删除 */
+  function bindQuickDeleteGestures() {
+    var cards = el.view.querySelectorAll('.card-quick-delete');
+    cards.forEach(function (btn) {
+      /* 点击删除按钮 */
+      btn.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        var slug = btn.getAttribute('data-slug');
+        var post = bySlug(slug);
+        if (!post) return;
+        if (!window.confirm('确定删除《' + post.title + '》？此操作会同时从云端移除。')) return;
+        try {
+          await FN.removePost(post);
+          refreshPosts();
+          renderHome(true);
+        } catch (err) {
+          window.alert('删除失败：' + (err && err.message ? err.message : err));
+        }
+      });
+    });
+
+    /* PC：在「我的」卡片上右键（contextmenu）→ 阻止默认菜单并弹出删除按钮 */
+    el.view.querySelectorAll('.post-card[data-slug]').forEach(function (card) {
+      var slug = card.getAttribute('data-slug');
+      var post = bySlug(slug);
+      if (!post || !isMine(post)) return;
+      card.addEventListener('contextmenu', function (e) {
+        e.preventDefault();
+        var btn = card.querySelector('.card-quick-delete');
+        if (!btn) return;
+        /* 切换显现状态：再次右键其它卡片自动隐藏旧的 */
+        el.view.querySelectorAll('.card-quick-delete.on').forEach(function (other) {
+          if (other !== btn) other.classList.remove('on');
+        });
+        btn.classList.add('on');
+      });
+
+      /* 手机：手指在卡片上右滑（touchstart → touchend，水平位移 > 40px，且方向向左→右） */
+      var tx = 0, ty = 0, touching = false;
+      card.addEventListener('touchstart', function (e) {
+        if (!e.touches || !e.touches.length) return;
+        tx = e.touches[0].clientX; ty = e.touches[0].clientY; touching = true;
+      }, { passive: true });
+      card.addEventListener('touchend', function (e) {
+        if (!touching) return;
+        touching = false;
+        var ct = e.changedTouches && e.changedTouches[0];
+        if (!ct) return;
+        var dx = ct.clientX - tx, dy = ct.clientY - ty;
+        /* 只识别「右滑」：水平位移 > 40，且明显 > 垂直位移 */
+        if (dx > 40 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          var btn = card.querySelector('.card-quick-delete');
+          if (!btn) return;
+          el.view.querySelectorAll('.card-quick-delete.on').forEach(function (other) {
+            if (other !== btn) other.classList.remove('on');
+          });
+          btn.classList.add('on');
+        }
+      }, { passive: true });
+    });
+
+    /* 点卡片其他位置时，把已显现的删除按钮收起来 */
+    document.addEventListener('click', function clearOn(e) {
+      if (!e.target.closest || !e.target.closest('.card-quick-delete')) {
+        el.view.querySelectorAll('.card-quick-delete.on').forEach(function (b) { b.classList.remove('on'); });
+      }
+    }, { passive: true });
   }
 
   /* 滚动轻微入场动画 */
@@ -373,6 +454,11 @@
     buildToc(prose);
     document.title = post.title + ' · 模块笔记';
     updateProgress();
+
+    /* 初始化批注系统（钢笔 / 荧光笔 / 文字批注 / 临时笔记） */
+    if (window.Annotation) {
+      window.Annotation.attach(slug, prose);
+    }
   }
 
   function buildToc(prose) {
@@ -536,6 +622,8 @@
 
   /* ---------------- router ---------------- */
   function route() {
+    /* 离开文章页时卸载批注层，避免多个批注层叠 */
+    if (window.Annotation) window.Annotation.detach();
     var hash = location.hash.replace(/^#/, '') || '/';
     closeMenu();
     if (hash === '/' || hash === '') return renderHome();
@@ -566,6 +654,18 @@
     var next = THEME_ORDER[(idx + 1) % THEME_ORDER.length];
     setTheme(next);
   });
+
+  /* 内置浏览器：顶栏按钮 → 在网页内打开搜索面板 */
+  var browserBtn = document.getElementById('browserBtn');
+  if (browserBtn && window.FNBrowser) {
+    browserBtn.addEventListener('click', function () { window.FNBrowser.open(); });
+  }
+
+  /* AI 在线翻译：顶栏按钮 → 打开翻译弹窗（中英法俄日韩互译） */
+  var transBtn = document.getElementById('transBtn');
+  if (transBtn && window.FNTranslator) {
+    transBtn.addEventListener('click', function () { window.FNTranslator.open(); });
+  }
 
   var writeBtn = document.getElementById('writeBtn');
   if (writeBtn && FN) {
@@ -610,7 +710,11 @@
     return POSTS.filter(function (p) { return isMine(p); });
   }
 
-  function openMyEditsModal() {
+  async function openMyEditsModal() {
+    /* 打开前先从远端拉一次最新文章，保证刚发/刚删的内容同步 */
+    if (FN && FN.refreshPosts) {
+      try { await FN.refreshPosts(); } catch (e) {}
+    }
     refreshPosts();
     var mask = document.createElement('div');
     mask.className = 'ed-mask';
@@ -666,7 +770,8 @@
     mask.querySelector('#myNew').addEventListener('click', function () {
       close();
       FN.openEditor({
-        onSaved: function () { refreshPosts(); route(); }
+        /* 保存完后自动重新打开「我的编辑」弹窗，让用户立刻看到刚发的文章 */
+        onSaved: function () { refreshPosts(); route(); setTimeout(openMyEditsModal, 0); }
       });
     });
 
@@ -940,6 +1045,34 @@
   initTheme();
   route();
 
+  /* ---------------- 跨设备同步提示条 ---------------- */
+  function showSyncToast(message, actionLabel, onAction) {
+    /* 同一时刻只保留一条，避免轮询密集弹多条 */
+    var old = document.getElementById('syncToast');
+    if (old) old.remove();
+    var toast = document.createElement('div');
+    toast.id = 'syncToast';
+    toast.setAttribute('role', 'status');
+    toast.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);' +
+      'background:#1f6feb;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;' +
+      'box-shadow:0 6px 20px rgba(0,0,0,.25);z-index:9999;display:flex;gap:12px;align-items:' +
+      'center;max-width:90vw;';
+    var span = document.createElement('span');
+    span.textContent = message;
+    toast.appendChild(span);
+    if (actionLabel) {
+      var btn = document.createElement('button');
+      btn.textContent = actionLabel;
+      btn.style.cssText = 'background:#fff;color:#1f6feb;border:0;border-radius:6px;' +
+        'padding:4px 10px;font-size:13px;cursor:pointer;';
+      btn.addEventListener('click', function () { toast.remove(); if (onAction) onAction(); });
+      toast.appendChild(btn);
+    }
+    document.body.appendChild(toast);
+    /* 无操作的提示 6 秒后自动消失；有操作的一直留着等用户点 */
+    if (!actionLabel) setTimeout(function () { toast.remove(); }, 6000);
+  }
+
   /* 异步拉取远端文章，完成后刷新一次 */
   if (FN && FN.refreshPosts) {
     FN.refreshPosts().then(function () {
@@ -947,6 +1080,27 @@
       route();
       refreshAuthUI();
       el.footerBuild.textContent = (FN.isRemote() ? '☁ ' : '◇ ') + 'v2.0 · ' + POSTS.length + ' notes';
+
+      /* 启动版本轮询：静态文件变 → 提示整页刷新；文章变 → 静默刷新列表 */
+      if (FN.pollVersion) {
+        FN.pollVersion({
+          interval: 30,
+          onStaticChange: function () {
+            showSyncToast('网站内容已在其他设备/渠道更新，是否加载最新版本？', '立即刷新', function () {
+              /* 加时间戳绕开 CDN 缓存，确保抓到最新 commit 对应的资源 */
+              location.replace(location.pathname + '?v=' + Date.now());
+            });
+          },
+          onPostsChange: function () {
+            FN.refreshPosts().then(function () {
+              refreshPosts();
+              route();
+              refreshAuthUI();
+              showSyncToast('检测到新发布的文章，已为你同步最新内容。', null, null);
+            });
+          }
+        });
+      }
     });
   }
   refreshAuthUI();

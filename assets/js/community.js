@@ -196,20 +196,41 @@
     }
   }
 
+  /* 连通性探测：判断 Worker 是否可达。
+     远端可达时优先用远端账号/发文；不可达才降级到本地。 */
+  async function pingRemote() {
+    if (!API_BASE) return false;
+    try {
+      await api('/api/posts');
+      state.usingRemote = true;
+      return true;
+    } catch (e) {
+      state.usingRemote = false;
+      return false;
+    }
+  }
+
   async function register(nickname, email, password, remember) {
     var name = nickname || email.split('@')[0];
-    /* 关键修复：无论远端是否可用，都先把账号写入本地账号表，
-       这样下次进入网页（远端可能不可达）仍能用同一套账号密码登录。 */
-    await localRegister(email, password, name);
-    if (state.usingRemote) {
+    var remoteOk = await pingRemote();
+
+    /* 远端优先：注册请求先打到 Worker */
+    if (remoteOk) {
       try {
         var data = await api('/api/register', { method: 'POST', body: { username: name, password: password } });
+        /* 远端注册成功 → 顺手把本地账号表也写一份做离线兜底 */
+        try { await localRegister(email, password, name); } catch (e) {}
         applySession(data.username, email, data.token, remember);
         return data;
       } catch (e) {
-        /* 远端失败：本地账号已落库，直接按本地会话登录 */
+        /* 远端返回 409「昵称已被占用」时，可能是同一用户在另一台设备注册过，
+           这里不吞错，直接把错误抛给前端让用户知道；其他错误才降级 */
+        if (e && e.message && e.message.indexOf('已被占用') !== -1) throw e;
       }
     }
+
+    /* 远端不可达：本地落库 */
+    await localRegister(email, password, name);
     var hit = await localLogin(email, password);
     applySession(hit.nickname, hit.email, 'local-' + Date.now(), remember);
     return { username: state.name };
@@ -217,22 +238,42 @@
 
   async function login(account, password, remember) {
     var acc = account.trim();
-    /* 关键修复：先查本地账号表。本地有就直接登录，不再因远端暂时不可达而误报「未注册」。 */
-    try {
-      var hit = await localLogin(acc, password);
-      applySession(hit.nickname, hit.email, 'local-' + Date.now(), remember);
-      return { username: hit.nickname };
-    } catch (e) {
-      /* 本地没查到 → 再尝试远端 */
+    var remoteOk = await pingRemote();
+
+    /* 远端优先：远端通就用远端校验，保证跨设备同账号一致 */
+    if (remoteOk) {
+      try {
+        var data = await api('/api/login', { method: 'POST', body: { username: acc, password: password } });
+        /* 远端登录成功 → 本地账号表同步一份（首次跨设备时可能本地没有） */
+        try {
+          var localHit = localAccounts().find(function (a) {
+            return a.email === acc.toLowerCase() || a.nickname.toLowerCase() === acc.toLowerCase();
+          });
+          if (!localHit) {
+            /* 本地没账号时，用远端返回的昵称补一份；密码哈希留待用户下次本地登录时校验 */
+            var emailKey = acc.indexOf('@') !== -1 ? acc.toLowerCase() : (acc + '@remote.local');
+            var arr = localAccounts();
+            arr.push({
+              email: emailKey,
+              nickname: data.username,
+              ph: await hashLocal(emailKey + '::' + password),
+              since: Date.now()
+            });
+            saveLocalAccounts(arr);
+          }
+        } catch (e) {}
+        applySession(data.username, acc, data.token, remember);
+        return data;
+      } catch (e) {
+        /* 远端返回「昵称或密码错误」时不降级到本地，直接抛 */
+        if (e && e.message && (e.message.indexOf('密码') !== -1 || e.message.indexOf('昵称') !== -1)) throw e;
+      }
     }
-    if (state.usingRemote) {
-      var data = await api('/api/login', { method: 'POST', body: { username: acc, password: password } });
-      applySession(data.username, acc, data.token, remember);
-      return data;
-    }
-    /* 都没查到：抛出原始本地错误 */
-    await localLogin(acc, password);
-    return { username: state.name };
+
+    /* 远端不可达或临时网络错：回退到本地账号表 */
+    var hit = await localLogin(acc, password);
+    applySession(hit.nickname, hit.email, 'local-' + Date.now(), remember);
+    return { username: hit.nickname };
   }
 
   /* 忘记密码：本地降级模式下直接重置 */
@@ -260,6 +301,43 @@
     }
   }
 
+  /* ---------------- 版本探测（跨设备同步确认） ----------------
+   * pollVersion({ onStaticChange, onPostsChange, interval })
+   *   onStaticChange(staticCommit): 静态网站 commit 变化 → 建议整页刷新
+   *   onPostsChange(postsMaxAt):   文章库最新更新时间变化 → 仅刷新文章列表
+   * 首次调用只记录基准值，不触发回调（避免刚打开页面就弹出"已更新"）。
+   */
+  var versionTimer = null;
+  async function fetchVersion() {
+    if (!API_BASE) return null;
+    try { return await api('/api/version'); } catch (e) { return null; }
+  }
+  function pollVersion(opts) {
+    opts = opts || {};
+    var interval = (opts.interval || 30) * 1000;
+    var base = null;
+    async function tick() {
+      var v = await fetchVersion();
+      if (!v) return;
+      if (!base) { base = v; return; }
+      if (v.staticCommit && base.staticCommit && v.staticCommit !== base.staticCommit) {
+        base = v;
+        if (opts.onStaticChange) opts.onStaticChange(v.staticCommit);
+        return; /* 静态变了，整页刷新优先，不再处理文章 */
+      }
+      if (v.postsMaxAt && base.postsMaxAt && v.postsMaxAt !== base.postsMaxAt) {
+        base = v;
+        if (opts.onPostsChange) opts.onPostsChange(v.postsMaxAt);
+      }
+    }
+    if (versionTimer) clearInterval(versionTimer);
+    tick();
+    versionTimer = setInterval(tick, interval);
+  }
+  function stopPollVersion() {
+    if (versionTimer) { clearInterval(versionTimer); versionTimer = null; }
+  }
+
   /* ---------------- 本机降级存储 ---------------- */
   function loadLocalPosts() {
     try {
@@ -285,28 +363,56 @@
 
   /* ---------------- 统一的发文/改文/删文 ---------------- */
   async function savePost(post) {
-    if (state.usingRemote && state.token) {
+    /* 发文前先探测远端：远端通就走远端，避免「本地登录的账号发不出云端」。
+       没 token 时也不勉强走远端（避免被 401 拦）。 */
+    var remoteOk = await pingRemote();
+    if (remoteOk && (!state.token || state.token.indexOf('local-') === 0)) {
+      /* 远端通但当前是本地会话：抛特定错误，由编辑器弹窗引导用户重新登远端 */
+      throw new Error('remote-auth-needed');
+    }
+    if (remoteOk && state.token && state.token.indexOf('local-') !== 0) {
       if (post.issueNumber) {
-        await api('/api/posts/' + post.issueNumber, { method: 'PUT', body: { title: post.title, content: post.rawHtml || post.content } });
+        await api('/api/posts/' + post.issueNumber, { method: 'PUT', body: {
+          title: post.title, content: post.rawHtml || post.content,
+          category: post.category, major: post.major, tags: post.tags
+        }});
       } else {
         var created = await api('/api/posts', { method: 'POST', body: {
-          title: post.title, content: post.rawHtml || post.content, category: post.category, tags: post.tags
+          title: post.title, content: post.rawHtml || post.content,
+          category: post.category, major: post.major, tags: post.tags
         }});
         post.slug = created.slug;
         post.issueNumber = created.issueNumber;
       }
+      post.isUserPost = true;
+      post.isMine = true;
+      post.author = state.name;
+      /* 立即把刚发的文章写入本地缓存列表，不用等 refreshPosts 回来 */
+      upsertRemoteCache(post);
       await refreshPosts();
       return post;
     }
     /* 降级：写本机 */
     if (!post.slug) post.slug = 'u-' + Date.now().toString(36);
+    post.isUserPost = true;
     upsertLocal(post);
     return post;
   }
 
+  /* 在远端文章缓存里立即插入/更新刚发的文章，保证「我的编辑」第一时间看到 */
+  function upsertRemoteCache(post) {
+    if (!state.usingRemote) return;
+    var i = state.remotePosts.findIndex(function (p) { return p.slug === post.slug; });
+    post.updatedAt = Date.now();
+    if (i === -1) state.remotePosts.unshift(post); else state.remotePosts[i] = post;
+  }
+
   async function removePost(post) {
-    if (state.usingRemote && state.token && post.issueNumber) {
+    var remoteOk = await pingRemote();
+    if (remoteOk && state.token && state.token.indexOf('local-') !== 0 && post.issueNumber) {
       await api('/api/posts/' + post.issueNumber, { method: 'DELETE' });
+      /* 立即从远端缓存移除，不用等 refreshPosts */
+      state.remotePosts = state.remotePosts.filter(function (p) { return p.slug !== post.slug; });
       await refreshPosts();
       return;
     }
@@ -701,7 +807,17 @@
         stateI.textContent = '已保存 ✓';
         setTimeout(function () { close(); if (opts.onSaved) opts.onSaved(post.slug); }, 300);
       } catch (e) {
-        stateI.textContent = '⚠ ' + e.message;
+        if (e && e.message === 'remote-auth-needed') {
+          stateI.textContent = '⚠ 远端已连接，请用云端账号重新登录后再发布';
+          /* 关掉当前编辑器，弹登录窗；登录成功后自动把刚才填的内容重新打开编辑器 */
+          close();
+          var lastPost = post;
+          openAuthModal('login', function () {
+            openEditor({ post: lastPost, onSaved: opts.onSaved });
+          });
+          return;
+        }
+        stateI.textContent = '⚠ ' + (e && e.message ? e.message : e);
       }
     });
 
@@ -727,6 +843,9 @@
     openEditor: openEditor,
     openAuthModal: openAuthModal,
     setApiBase: function (url) { API_BASE = url || ''; },
+    fetchVersion: fetchVersion,
+    pollVersion: pollVersion,
+    stopPollVersion: stopPollVersion,
     /* 个人中心相关 */
     getProfileData: getProfileData,
     saveProfileData: saveProfileData,
