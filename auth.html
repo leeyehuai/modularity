@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 / 注册 · 模块学习</title>
+<link rel="icon" href="assets/images/logo.png">
+<link rel="stylesheet" href="assets/css/style.css?v=16">
+<style>
+  /* 独立登录页：复用主站 style.css 的变量 / 按钮 / 输入框样式 */
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background:
+      radial-gradient(900px 480px at 50% -10%, rgba(111, 135, 245, .18), transparent 70%),
+      var(--bg);
+  }
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border, rgba(0,0,0,.08));
+    border-radius: 18px;
+    box-shadow: 0 24px 60px -30px rgba(15, 25, 60, .35);
+    padding: 30px 30px 26px;
+    animation: authIn .5s ease-out;
+  }
+  @keyframes authIn {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .auth-brand img { width: 34px; height: 34px; border-radius: 8px; }
+  .auth-brand b { font-size: 18px; letter-spacing: -.01em; }
+  .auth-brand em { font-style: normal; color: var(--text-2); font-size: 12px; margin-left: 4px; }
+  .auth-sub {
+    color: var(--text-2);
+    font-size: 13px;
+    margin: 0 0 20px;
+  }
+  .auth-card h2 {
+    margin: 4px 0 16px;
+    font-size: 20px;
+  }
+  .auth-tabs {
+    display: flex;
+    background: var(--bg-soft);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 20px;
+  }
+  .auth-tabs button {
+    flex: 1;
+    border: 0;
+    background: transparent;
+    color: var(--text-2);
+    padding: 8px 0;
+    font-size: 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+  .auth-tabs button.active {
+    background: var(--bg-elev);
+    color: var(--accent);
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(0,0,0,.06);
+  }
+  .auth-form .ed-label { display: block; margin: 12px 0 6px; font-size: 13px; color: var(--text-2); }
+  .auth-form .ed-input { width: 100%; box-sizing: border-box; }
+  .auth-form .cap-row { display: flex; gap: 10px; align-items: center; }
+  .auth-form .cap-row .cap-input { flex: 1; }
+  .auth-form .cap-img {
+    flex: 0 0 auto;
+    min-width: 70px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent-soft), var(--bg-soft));
+    border: 1px dashed var(--accent);
+    color: var(--accent);
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    letter-spacing: 4px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .auth-form .cap-check { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; color: var(--text-2); }
+  .auth-form .ed-save-state { min-height: 20px; margin-top: 10px; font-size: 13px; color: var(--text-2); }
+  .auth-form .btn.primary {
+    width: 100%;
+    margin-top: 16px;
+    justify-content: center;   /* 登录 / 注册并登录：文字居中 */
+    text-align: center;
+  }
+  .auth-switch {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-2);
+  }
+  .auth-switch a { color: var(--accent); }
+  .auth-back {
+    display: block;
+    margin-top: 18px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--text-2);
+    text-decoration: none;
+  }
+  .auth-back:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-brand">
+      <img src="assets/images/logo.png" alt="模块学习 logo">
+      <b>模块学习</b><em>MODULARITY</em>
+    </div>
+    <p class="auth-sub">登录后即可浏览全部笔记、发布与管理自己的学习内容。</p>
+
+    <div class="auth-tabs" role="tablist">
+      <button type="button" data-mode="login" class="active">登录</button>
+      <button type="button" data-mode="register">注册新账号</button>
+    </div>
+
+    <h2 id="authTitle">登录</h2>
+    <form class="auth-form" id="authForm" autocomplete="off">
+      <div id="authBody"></div>
+      <button type="submit" class="btn primary" id="authOk">登录</button>
+      <div class="ed-save-state" id="authState"></div>
+      <div class="auth-switch" id="authSwitch"></div>
+    </form>
+    <a class="auth-back" href="./?guest=1">← 暂不登录，先逛逛主站（只读模式）</a>
+  </div>
+</div>
+
+<!-- 复用 community.js：只取其登录/注册/远端降级逻辑，不引入 app.js（避免整站启动） -->
+<script src="assets/js/community.js?v=14"></script>
+<script>
+(function () {
+  'use strict';
+
+  /* 已登录 → 直接回主界面 */
+  if (window.FNCommunity && FNCommunity.isLoggedIn()) {
+    window.location.replace('./');
+    return;
+  }
+
+  var EMAIL_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
+  var captcha = String(Math.floor(1000 + Math.random() * 9000));
+  var mode = 'login';
+
+  var $ = function (s) { return document.querySelector(s); };
+  var body = $('#authBody');
+  var title = $('#authTitle');
+  var okBtn = $('#authOk');
+  var stateI = $('#authState');
+  var switchI = $('#authSwitch');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c];
+    });
+  }
+
+  function bodyHtml(innerMode) {
+    if (innerMode === 'register') {
+      return '' +
+        '<label class="ed-label">邮箱 *</label>' +
+        '<input class="ed-input" name="email" type="email" maxlength="64" placeholder="用于登录，保密不公开" autocomplete="email">' +
+        '<label class="ed-label">昵称 *</label>' +
+        '<input class="ed-input" name="nick" maxlength="24" placeholder="2-24 位中英文/数字">' +
+        '<label class="ed-label">密码 *</label>' +
+        '<input class="ed-input" name="pwd" type="password" maxlength="64" placeholder="至少 6 位" autocomplete="new-password">' +
+        '<label class="ed-label">确认密码 *</label>' +
+        '<input class="ed-input" name="pwd2" type="password" maxlength="64" placeholder="再次输入密码" autocomplete="new-password">' +
+        '<label class="ed-label">人机验证 * <span style="font-weight:400;color:var(--text-2)">（输入右图数字）</span></label>' +
+        '<div class="cap-row">' +
+        '  <input class="ed-input cap-input" name="cap" inputmode="numeric" maxlength="4" placeholder="4 位数字" autocomplete="off">' +
+        '  <span class="cap-img" id="capImg" title="点击刷新">' + captcha + '</span>' +
+        '</div>' +
+        '<label class="cap-check"><input type="checkbox" name="remember"> 自动登录（下次进入网站免输入）</label>';
+    }
+    /* login */
+    return '' +
+      '<label class="ed-label">账号 * <span style="font-weight:400;color:var(--text-2)">（邮箱或昵称）</span></label>' +
+      '<input class="ed-input" name="account" maxlength="64" placeholder="输入邮箱或昵称" autocomplete="username">' +
+      '<label class="ed-label">密码 *</label>' +
+      '<input class="ed-input" name="pwd" type="password" maxlength="64" placeholder="输入密码" autocomplete="current-password">' +
+      '<label class="cap-check"><input type="checkbox" name="remember" checked> 自动登录（下次进入网站免输入）</label>';
+  }
+
+  function render(innerMode) {
+    mode = innerMode;
+    document.querySelectorAll('.auth-tabs button').forEach(function (b) {
+      b.classList.toggle('active', b.getAttribute('data-mode') === innerMode);
+    });
+    title.textContent = innerMode === 'register' ? '注册新账号' : '登录';
+    okBtn.textContent = innerMode === 'register' ? '注册并登录' : '登录';
+    stateI.textContent = '';
+    body.innerHTML = bodyHtml(innerMode);
+    switchI.innerHTML = innerMode === 'register'
+      ? ''
+      : '还没有账号？<a href="javascript:;" id="goReg">立即注册</a>';
+    var goReg = document.getElementById('goReg');
+    if (goReg) goReg.addEventListener('click', function () { render('register'); });
+    var capImg = document.getElementById('capImg');
+    if (capImg) capImg.addEventListener('click', function () {
+      captcha = String(Math.floor(1000 + Math.random() * 9000));
+      capImg.textContent = captcha;
+    });
+  }
+
+  document.querySelectorAll('.auth-tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      render(b.getAttribute('data-mode'));
+    });
+  });
+
+  $('#authForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var fd = new FormData(e.target);
+    try {
+      if (mode === 'register') {
+        var email = String(fd.get('email') || '').trim();
+        var nick = String(fd.get('nick') || '').trim();
+        var pwd = String(fd.get('pwd') || '');
+        var pwd2 = String(fd.get('pwd2') || '');
+        var cap = String(fd.get('cap') || '').trim();
+        if (!EMAIL_RE.test(email)) { stateI.textContent = '⚠ 请输入正确的邮箱地址'; return; }
+        if (nick.length < 2 || nick.length > 24) { stateI.textContent = '⚠ 昵称需为 2-24 位'; return; }
+        if (pwd.length < 6) { stateI.textContent = '⚠ 密码至少 6 位'; return; }
+        if (pwd !== pwd2) { stateI.textContent = '⚠ 两次输入的密码不一致'; return; }
+        if (cap !== captcha) { stateI.textContent = '⚠ 验证码不正确，点击图片可刷新'; return; }
+        stateI.textContent = '注册中…';
+        await FNCommunity.register(nick, email, pwd, !!fd.get('remember'));
+      } else {
+        var account = String(fd.get('account') || '').trim();
+        var pwdL = String(fd.get('pwd') || '');
+        if (!account) { stateI.textContent = '⚠ 请输入邮箱或昵称'; return; }
+        if (!pwdL) { stateI.textContent = '⚠ 请输入密码'; return; }
+        stateI.textContent = '登录中…';
+        await FNCommunity.login(account, pwdL, !!fd.get('remember'));
+      }
+      stateI.textContent = '✓ 成功，正在进入主界面…';
+      setTimeout(function () { window.location.replace('./'); }, 450);
+    } catch (err) {
+      stateI.textContent = '⚠ ' + (err && err.message ? err.message : err);
+    }
+  });
+
+  render('login');
+})();
+</script>
+</body>
+</html>
