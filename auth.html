@@ -169,7 +169,10 @@
   }
 
   var EMAIL_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
-  var captcha = String(Math.floor(1000 + Math.random() * 9000));
+  /* 服务端验证码：从 Worker 拉 SVG 图 + 签名 id，答案不下发 */
+  var API_BASE = 'https://notes-api.3229573185.workers.dev';
+  var captchaId = '';
+  var captchaObjUrl = '';
   var mode = 'login';
 
   var $ = function (s) { return document.querySelector(s); };
@@ -185,6 +188,15 @@
     });
   }
 
+  function captchaRowHtml() {
+    return '' +
+      '<label class="ed-label">人机验证 * <span style="font-weight:400;color:var(--text-2)">（输入右图数字，点击图片刷新）</span></label>' +
+      '<div class="cap-row">' +
+      '  <input class="ed-input cap-input" name="cap" inputmode="numeric" maxlength="4" placeholder="4 位数字" autocomplete="off">' +
+      '  <img class="cap-img" id="capImg" title="点击刷新" alt="验证码" style="width:100px;height:40px;border-radius:8px;cursor:pointer;background:rgba(111,135,245,.08)">' +
+      '</div>';
+  }
+
   function bodyHtml(innerMode) {
     if (innerMode === 'register') {
       return '' +
@@ -196,11 +208,7 @@
         '<input class="ed-input" name="pwd" type="password" maxlength="64" placeholder="至少 6 位" autocomplete="new-password">' +
         '<label class="ed-label">确认密码 *</label>' +
         '<input class="ed-input" name="pwd2" type="password" maxlength="64" placeholder="再次输入密码" autocomplete="new-password">' +
-        '<label class="ed-label">人机验证 * <span style="font-weight:400;color:var(--text-2)">（输入右图数字）</span></label>' +
-        '<div class="cap-row">' +
-        '  <input class="ed-input cap-input" name="cap" inputmode="numeric" maxlength="4" placeholder="4 位数字" autocomplete="off">' +
-        '  <span class="cap-img" id="capImg" title="点击刷新">' + captcha + '</span>' +
-        '</div>' +
+        captchaRowHtml() +
         '<label class="cap-check"><input type="checkbox" name="remember"> 自动登录（下次进入网站免输入）</label>';
     }
     /* login */
@@ -209,7 +217,23 @@
       '<input class="ed-input" name="account" maxlength="64" placeholder="输入邮箱或昵称" autocomplete="username">' +
       '<label class="ed-label">密码 *</label>' +
       '<input class="ed-input" name="pwd" type="password" maxlength="64" placeholder="输入密码" autocomplete="current-password">' +
+      captchaRowHtml() +
       '<label class="cap-check"><input type="checkbox" name="remember" checked> 自动登录（下次进入网站免输入）</label>';
+  }
+
+  /* 从 Worker 拉验证码图 */
+  async function refreshCaptcha() {
+    var img = document.getElementById('capImg');
+    try {
+      var res = await fetch(API_BASE + '/api/captcha');
+      captchaId = res.headers.get('X-Captcha-Id') || '';
+      var blob = await res.blob();
+      if (captchaObjUrl) URL.revokeObjectURL(captchaObjUrl);
+      captchaObjUrl = URL.createObjectURL(blob);
+      if (img) img.src = captchaObjUrl;
+    } catch (e) {
+      /* 远端不可达时静默：本地降级模式不需要验证码 */
+    }
   }
 
   function render(innerMode) {
@@ -227,10 +251,9 @@
     var goReg = document.getElementById('goReg');
     if (goReg) goReg.addEventListener('click', function () { render('register'); });
     var capImg = document.getElementById('capImg');
-    if (capImg) capImg.addEventListener('click', function () {
-      captcha = String(Math.floor(1000 + Math.random() * 9000));
-      capImg.textContent = captcha;
-    });
+    if (capImg) capImg.addEventListener('click', function () { refreshCaptcha(); });
+    /* 渲染后拉取新验证码 */
+    refreshCaptcha();
   }
 
   document.querySelectorAll('.auth-tabs button').forEach(function (b) {
@@ -253,16 +276,18 @@
         if (nick.length < 2 || nick.length > 24) { stateI.textContent = '⚠ 昵称需为 2-24 位'; return; }
         if (pwd.length < 6) { stateI.textContent = '⚠ 密码至少 6 位'; return; }
         if (pwd !== pwd2) { stateI.textContent = '⚠ 两次输入的密码不一致'; return; }
-        if (cap !== captcha) { stateI.textContent = '⚠ 验证码不正确，点击图片可刷新'; return; }
+        if (!cap) { stateI.textContent = '⚠ 请输入右侧验证码'; return; }
         stateI.textContent = '注册中…';
-        await FNCommunity.register(nick, email, pwd, !!fd.get('remember'));
+        await FNCommunity.register(nick, email, pwd, !!fd.get('remember'), { id: captchaId, code: cap });
       } else {
         var account = String(fd.get('account') || '').trim();
         var pwdL = String(fd.get('pwd') || '');
+        var capL = String(fd.get('cap') || '').trim();
         if (!account) { stateI.textContent = '⚠ 请输入邮箱或昵称'; return; }
         if (!pwdL) { stateI.textContent = '⚠ 请输入密码'; return; }
+        if (!capL) { stateI.textContent = '⚠ 请输入右侧验证码'; return; }
         stateI.textContent = '登录中…';
-        await FNCommunity.login(account, pwdL, !!fd.get('remember'));
+        await FNCommunity.login(account, pwdL, !!fd.get('remember'), { id: captchaId, code: capL });
       }
       stateI.textContent = '✓ 成功，正在进入主界面…';
       /* 触发整页淡出转场（约 450ms）后再跳主界面；
