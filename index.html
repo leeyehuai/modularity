@@ -9,14 +9,13 @@
 <script>
 /* 封面只在浏览器会话内播一次：
    - sessionStorage 有 fn-splash-shown 标 → 已播过，CSS 直接隐藏封面
-   - 否则正常播，播完后 splash.js 会打标 */
+   - ?from=auth（登录成功跳回）→ 已播过，直接进主界面
+   - ?guest=1（只读模式）→ 已播过，直接进主界面 */
 (function () {
   try {
-    if (sessionStorage.getItem('fn-splash-shown') === '1') {
-      document.documentElement.setAttribute('data-skip-splash', '1');
-      document.documentElement.setAttribute('data-soft-enter', '1');
-    } else if (/[?&]guest=1/.test(location.search)) {
-      /* 首次只读模式：也不播，直接进 */
+    var fromAuth = /[?&]from=auth/.test(location.search);
+    var guest = /[?&]guest=1/.test(location.search);
+    if (sessionStorage.getItem('fn-splash-shown') === '1' || fromAuth || guest) {
       document.documentElement.setAttribute('data-skip-splash', '1');
       document.documentElement.setAttribute('data-soft-enter', '1');
       sessionStorage.setItem('fn-splash-shown', '1');
@@ -128,6 +127,6 @@
 <script src="assets/js/browser-panel.js?v=2"></script>
 <script src="assets/js/translator.js?v=1"></script>
 <script src="assets/js/app.js?v=23"></script>
-<script src="assets/js/splash.js?v=13"></script>
+<script src="assets/js/splash.js?v=14"></script>
 
 </body></html>
