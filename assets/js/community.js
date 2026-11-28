@@ -243,6 +243,11 @@
 
     /* 远端优先：注册请求先打到 Worker */
     if (remoteOk) {
+      /* 安全防御：用户已填验证码但 captchaId 为空，
+         此时若发请求必然被远端 400 拒绝，绝不能让它降级到本地注册放行 */
+      if (captcha && captcha.code && !captcha.id) {
+        throw new Error('验证码未加载完成，请刷新验证码后重试');
+      }
       try {
         var body = { username: name, password: password };
         /* 远端 Worker 强制验证码（captcha = { id, code }） */
@@ -276,6 +281,11 @@
 
     /* 远端优先：远端通就用远端校验，保证跨设备同账号一致 */
     if (remoteOk) {
+      /* 安全防御：用户已填验证码但 captchaId 为空（图未加载好），
+         此时若发请求必然被远端 400 拒绝，绝不能让它降级到本地登录放行 */
+      if (captcha && captcha.code && !captcha.id) {
+        throw new Error('验证码未加载完成，请刷新验证码后重试');
+      }
       try {
         var body = { username: acc, password: password };
         if (captcha && captcha.id) {
