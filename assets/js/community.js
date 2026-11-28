@@ -246,33 +246,34 @@
 
   async function register(nickname, email, password, remember, captcha) {
     var name = nickname || email.split('@')[0];
-    var remoteOk = await pingRemote();
 
-    /* 远端优先：注册请求先打到 Worker */
-    if (remoteOk) {
-      /* 安全防御：用户已填验证码但 captchaId 为空，
-         此时若发请求必然被远端 400 拒绝，绝不能让它降级到本地注册放行 */
-      if (captcha && captcha.code && !captcha.id) {
-        throw new Error('验证码未加载完成，请刷新验证码后重试');
+    /* 安全防御：用户已填验证码但 captchaId 为空，
+       此时若发请求必然被远端 400 拒绝，绝不能让它降级到本地注册放行 */
+    if (captcha && captcha.code && !captcha.id) {
+      throw new Error('验证码未加载完成，请刷新验证码后重试');
+    }
+
+    /* 核心修复：不再先 ping 探测，直接尝试发注册请求到 Worker。
+       只有请求真的网络失败（network-error / no-api）才降级到本地。 */
+    try {
+      var body = { username: name, password: password };
+      /* 远端 Worker 强制验证码（captcha = { id, code }） */
+      if (captcha && captcha.id) {
+        body.captchaId = captcha.id;
+        body.captchaCode = captcha.code;
       }
-      try {
-        var body = { username: name, password: password };
-        /* 远端 Worker 强制验证码（captcha = { id, code }） */
-        if (captcha && captcha.id) {
-          body.captchaId = captcha.id;
-          body.captchaCode = captcha.code;
-        }
-        var data = await api('/api/register', { method: 'POST', body: body });
-        /* 远端注册成功 → 顺手把本地账号表也写一份做离线兜底 */
-        try { await localRegister(email, password, name); } catch (e) {}
-        applySession(data.username, email, data.token, remember);
-        return data;
-      } catch (e) {
-        /* 只有「Worker 连不上」（no-api / network-error）才允许本地降级注册；
-           其余一切（昵称占用 / 验证码错 / 限流 / 业务拒绝）都抛给用户。 */
-        if (!(e && (e.network || e.message === 'no-api'))) throw e;
-        /* 走到这里 = 远端不可达，允许本地降级 */
-      }
+      var data = await api('/api/register', { method: 'POST', body: body });
+      /* 远端注册成功 → 顺手把本地账号表也写一份做离线兜底 */
+      try { await localRegister(email, password, name); } catch (e) {}
+      applySession(data.username, email, data.token, remember);
+      return data;
+    } catch (e) {
+      /* 只有「Worker 真的连不上」（no-api / network-error）才允许本地降级注册；
+         其余一切（昵称占用 / 验证码错 / 限流 / 业务拒绝）都抛给用户。 */
+      console.warn('[register] 远端调用失败，错误类型:', e && e.message, 'network标记:', e && e.network);
+      if (!(e && (e.network || e.message === 'no-api'))) throw e;
+      /* 走到这里 = 远端真的不可达，允许本地降级 */
+      console.warn('[register] 判定为网络错误，降级到本地注册');
     }
 
     /* 远端不可达：本地落库 */
@@ -284,51 +285,50 @@
 
   async function login(account, password, remember, captcha) {
     var acc = account.trim();
-    var remoteOk = await pingRemote();
 
-    /* 远端优先：远端通就用远端校验，保证跨设备同账号一致 */
-    if (remoteOk) {
-      /* 安全防御：用户已填验证码但 captchaId 为空（图未加载好），
-         此时若发请求必然被远端 400 拒绝，绝不能让它降级到本地登录放行 */
-      if (captcha && captcha.code && !captcha.id) {
-        throw new Error('验证码未加载完成，请刷新验证码后重试');
+    /* 安全防御：用户已填验证码但 captchaId 为空（图未加载好），
+       此时若发请求必然被远端 400 拒绝，绝不能让它降级到本地登录放行 */
+    if (captcha && captcha.code && !captcha.id) {
+      throw new Error('验证码未加载完成，请刷新验证码后重试');
+    }
+
+    /* 核心修复：不再先 ping 探测（探测可能因浏览器插件/代理误报失败），
+       直接尝试发登录请求到 Worker。
+       只有请求真的网络失败（network-error / no-api）才降级到本地。 */
+    try {
+      var body = { username: acc, password: password };
+      if (captcha && captcha.id) {
+        body.captchaId = captcha.id;
+        body.captchaCode = captcha.code;
       }
+      var data = await api('/api/login', { method: 'POST', body: body });
+      /* 远端登录成功 → 本地账号表同步一份（首次跨设备时可能本地没有） */
       try {
-        var body = { username: acc, password: password };
-        if (captcha && captcha.id) {
-          body.captchaId = captcha.id;
-          body.captchaCode = captcha.code;
-        }
-        var data = await api('/api/login', { method: 'POST', body: body });
-        /* 远端登录成功 → 本地账号表同步一份（首次跨设备时可能本地没有） */
-        try {
-          var localHit = localAccounts().find(function (a) {
-            return a.email === acc.toLowerCase() || a.nickname.toLowerCase() === acc.toLowerCase();
+        var localHit = localAccounts().find(function (a) {
+          return a.email === acc.toLowerCase() || a.nickname.toLowerCase() === acc.toLowerCase();
+        });
+        if (!localHit) {
+          /* 本地没账号时，用远端返回的昵称补一份；密码哈希留待用户下次本地登录时校验 */
+          var emailKey = acc.indexOf('@') !== -1 ? acc.toLowerCase() : (acc + '@remote.local');
+          var arr = localAccounts();
+          arr.push({
+            email: emailKey,
+            nickname: data.username,
+            ph: await hashLocal(emailKey + '::' + password),
+            since: Date.now()
           });
-          if (!localHit) {
-            /* 本地没账号时，用远端返回的昵称补一份；密码哈希留待用户下次本地登录时校验 */
-            var emailKey = acc.indexOf('@') !== -1 ? acc.toLowerCase() : (acc + '@remote.local');
-            var arr = localAccounts();
-            arr.push({
-              email: emailKey,
-              nickname: data.username,
-              ph: await hashLocal(emailKey + '::' + password),
-              since: Date.now()
-            });
-            saveLocalAccounts(arr);
-          }
-        } catch (e) {}
-        applySession(data.username, acc, data.token, remember);
-        return data;
-      } catch (e) {
-        /* 安全收紧：远端可达时，任何错误（包括验证码错/密码错/限流）
-           都绝不降级到本地登录——直接抛给用户处理。
-           只有「Worker 网络连不上」才允许本地降级模式。 */
-        console.warn('[login] 远端调用失败，错误类型:', e && e.message, 'network标记:', e && e.network);
-        if (!(e && (e.network || e.message === 'no-api'))) throw e;
-        /* 走到这里 = 远端不可达，允许本地降级 */
-        console.warn('[login] 判定为网络错误，降级到本地登录');
-      }
+          saveLocalAccounts(arr);
+        }
+      } catch (e) {}
+      applySession(data.username, acc, data.token, remember);
+      return data;
+    } catch (e) {
+      /* 只有「Worker 真的连不上」（no-api / network-error）才允许降级到本地登录；
+         其余一切（验证码错 / 密码错 / 限流 / 业务拒绝）都抛给用户，绝不降级。 */
+      console.warn('[login] 远端调用失败，错误类型:', e && e.message, 'network标记:', e && e.network);
+      if (!(e && (e.network || e.message === 'no-api'))) throw e;
+      /* 走到这里 = 远端真的不可达，允许本地降级 */
+      console.warn('[login] 判定为网络错误，降级到本地登录');
     }
 
     /* 远端不可达或临时网络错：回退到本地账号表 */
