@@ -1,6 +1,6 @@
 # 模块笔记 MODULARITY · 部署总结
 
-> 部署完成日期：2026-11-26
+> 最后更新：2026-11-28
 > 架构：GitHub Pages（前端静态站）+ Cloudflare Worker（后端 API）+ GitHub Issues（数据库）
 
 ---
@@ -10,6 +10,8 @@
 | 组件 | 地址 / 位置 | 状态 |
 |---|---|---|
 | 🌐 公开网站（所有人访问） | https://leeyehuai.github.io/modularity/ | ✅ 已上线 |
+| 🔐 登录 / 注册页 | https://leeyehuai.github.io/modularity/auth.html | ✅ 已上线 |
+| 👁️ 只读模式（不播封面，直接进） | https://leeyehuai.github.io/modularity/?guest=1 | ✅ 已上线 |
 | ⚙️ 后端 Worker（API 服务） | https://notes-api.3229573185.workers.dev | ✅ 已运行 |
 | 🗄️ 文章数据库 | GitHub 私有仓库 `notes-db` 的 Issues | ✅ 已连通 |
 | 📁 前端源码仓库 | https://github.com/leeyehuai/modularity | ✅ Public |
@@ -44,7 +46,7 @@
 
 - **存储位置**：GitHub 仓库 `leeyehuai/modularity`
 - **更新方式**：本地改完 → 拖文件上传到 GitHub → 1-2 分钟自动构建
-- **影响**：网页长什么样、有哪些写死的文章、样式配色
+- **影响**：网页长什么样、有哪些写死的文章、样式配色、封面行为
 
 ### 2. 动态内容（用户发的文章、注册的账号）
 
@@ -56,35 +58,62 @@
 
 ---
 
-## 三点五、跨设备同步确认（2026-11-26 新增）
+## 四、封面（Splash）行为规则（2026-11-28 定稿）
 
-站点打开后会每 30 秒轮询一次 Worker 的 `/api/version` 接口，自动对比两类版本号：
+### 规则总览
 
-| 版本号 | 含义 | 变化时的行为 |
-|---|---|---|
-| `staticCommit` | 静态网站仓库 `leeyehuai/modularity` main 分支最新 commit SHA | 弹出底部通知条「网站内容已在其他设备/渠道更新」+ 「立即刷新」按钮，点击后带时间戳重载页面（绕过 CDN 缓存） |
-| `postsMaxAt` | 用户文章库（Issues）最新更新时间戳 | 静默重新拉取 `/api/posts`，文章列表即时更新，并轻提示「检测到新发布的文章，已为你同步最新内容」 |
+| 场景 | 行为 |
+|---|---|
+| **首次打开**（关浏览器再开） | 播一次封面 → 分流 |
+| **登录成功跳回** `?from=auth` | **不播**，直接进主界面 |
+| **注册成功跳回** `?from=auth` | **不播**，直接进主界面 |
+| **只读模式** `?guest=1` | **不播**，直接进主界面（柔和淡入） |
+| **会话内刷新 F5** | **不播**，直接进主界面 |
+| **未登录用户** | 播封面 → 跳 auth.html |
 
-实现位置：
-- 后端接口：[worker/worker.js](worker/worker.js) → `if (path === '/api/version')`
-- 前端轮询：[assets/js/community.js](assets/js/community.js) → `pollVersion()` / `stopPollVersion()`
-- 提示条 UI：[assets/js/app.js](assets/js/app.js) → `showSyncToast()`
+### 实现机制
 
-**部署步骤**：
-1. 把 `worker/worker.js` 完整内容粘贴到 Cloudflare Dashboard → `notes-api` → `Edit code` → `Deploy`
-2. 把改动过的 `assets/js/app.js`、`assets/js/community.js` 上传到 GitHub 仓库 `leeyehuai/modularity`
-3. 等 GitHub Pages 自动构建（1-2 分钟），所有设备下次打开时即可自动完成同步确认
+- **打标**：`sessionStorage.fn-splash-shown = '1'`，播完/跳回时打标
+- **跳过**：head 内联脚本 + splash.js 双重检测，已打标或 `?from=auth` / `?guest=1` 直接隐藏并移除封面元素
+- **版本号**：改动后必须升级 `splash.js?v=XX` 版本号，强制浏览器刷新缓存
+
+### 相关文件
+
+| 文件 | 作用 |
+|---|---|
+| [index.html](index.html) | head 内联脚本：sessionStorage 检测、打标、隐藏封面 |
+| [assets/js/splash.js](assets/js/splash.js) | 封面编排：播放、分流、跳过逻辑 |
+| [assets/css/splash.css](assets/css/splash.css) | 封面样式、隐藏规则 |
+| [assets/video/splash.mp4](assets/video/splash.mp4) | 封面视频（已去除右下角水印） |
 
 ---
 
-## 四、日常维护操作
+## 五、跨设备同步确认（2026-11-26 上线）
+
+站点打开后每 30 秒轮询 Worker 的 `/api/version` 接口：
+
+| 版本号 | 含义 | 变化时的行为 |
+|---|---|---|
+| `staticCommit` | 仓库 main 分支最新 commit SHA | 弹出通知条「网站内容已在其他设备更新」+ 立即刷新 |
+| `postsMaxAt` | 文章库最新更新时间戳 | 静默拉取新文章，轻提示同步完成 |
+
+---
+
+## 六、日常维护操作
 
 ### 改网页外观 / 新增一篇写死的笔记
 
-1. 本地修改文件（如 `assets/css/style.css`、`assets/js/posts/xxx.js`）
+1. 本地修改文件
 2. 打开 https://github.com/leeyehuai/modularity
 3. 点 `+` → `Upload files` → 把改动的文件拖进去
 4. 点 `Commit changes` → 等 1-2 分钟自动生效
+
+### 改封面逻辑
+
+1. 修改 `index.html` / `splash.js` / `splash.css`
+2. **升级 `splash.js?v=XX` 版本号**（重要！否则浏览器缓存旧代码）
+3. 上传这 3 个文件到 GitHub
+4. 等 Pages 构建，硬刷新（Ctrl+Shift+R）验证
 
 ### 后端 Worker 需要修改
 
@@ -93,8 +122,6 @@
 3. 改完点 `Deploy`
 
 ### 环境变量（不要泄露）
-
-在 Cloudflare Dashboard → Worker → Settings → Variables：
 
 | 变量 | 说明 |
 |---|---|
@@ -105,44 +132,53 @@
 
 ---
 
-## 五、常见问题
+## 七、常见问题
 
 | 问题 | 原因 | 解决 |
 |---|---|---|
 | 打开网站 404 | 文件名拼错 / Pages 没配置 | 确认仓库有 `index.html`，Settings→Pages 选 main/root |
-| 发文提示「离线模式」 | Worker 连不上 | 检查 `community.js` 第 16 行的 API_BASE 是否正确 |
-| 发文报「昵称或密码错误」 | 本地账号表与云端不同步 | 先注册，再登录；或清 localStorage 重试 |
-| 改了文件但网页没变 | CDN 缓存 | 强制刷新 Ctrl+F5，或等 5 分钟 |
+| 发文提示「离线模式」 | Worker 连不上 | 检查 `community.js` 的 API_BASE 是否正确 |
+| 改了文件但网页没变 | CDN 缓存 / 没升级版本号 | 硬刷新 Ctrl+Shift+R；JS/CSS 改完必须升级 `?v=XX` |
+| 登录成功后还播封面 | 没上传最新 splash.js | 确认线上 `splash.js?v=14`，硬刷新清缓存 |
+| 封面视频还有水印 | 上传了旧版 splash.mp4 | 确认线上 splash.mp4 大小为 852 KB 左右 |
 
 ---
 
-## 六、本地开发预览
+## 八、本地开发预览
 
 ```bash
-# 在项目根目录执行任一命令，然后访问 http://localhost:8080
+# 方法 1：Node（推荐）
+node _preview_server.js
+# 访问 http://localhost:8899
+
+# 方法 2：Python
 python -m http.server 8080
-# 或
-npx serve .
 ```
 
 ---
 
-## 七、目录结构
+## 九、目录结构
 
 ```text
 Website Deployment/
-├── index.html              # 网页入口
+├── index.html              # 网页入口（含封面检测内联脚本）
+├── auth.html               # 登录/注册页
 ├── 404.html                # 错误页
-├── README.md               # 项目说明（含线上地址）
-├── DEPLOY.md               # 本文件（部署总结）
-├── worker/
-│   └── worker.js           # Cloudflare Worker 后端代码（不上传到 Pages）
+├── README.md               # 项目说明
+├── DEPLOY.md               # 本文件
+├── worker/                 # Cloudflare Worker 后端（不上传 Pages）
+│   └── worker.js
 └── assets/
-    ├── css/style.css       # 全部样式
+    ├── css/
+    │   ├── style.css       # 全部样式
+    │   └── splash.css      # 封面样式
     ├── images/logo.png     # 网站图标
+    ├── video/
+    │   └── splash.mp4      # 封面视频（无水印版）
     └── js/
         ├── app.js          # 路由/渲染/搜索/主题
-        ├── community.js    # 登录/发文/云端同步（对接 Worker）
+        ├── community.js    # 登录/发文/云端同步
+        ├── splash.js       # 封面编排（会话内只播一次）
         ├── posts.js        # 文章注册入口
         └── posts/          # 每篇写死的笔记一个文件
 ```
