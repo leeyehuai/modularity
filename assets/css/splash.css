@@ -25,7 +25,7 @@ html[data-soft-enter="1"] body {
   opacity: 1;
 }
 
-/* 视频：居中、完整覆盖、不变形 */
+/* 视频：居中、完整覆盖、不变形，高清屏优化 */
 .splash-video {
   position: absolute;
   inset: 0;
@@ -33,6 +33,13 @@ html[data-soft-enter="1"] body {
   height: 100%;
   object-fit: cover;
   display: block;
+  /* 高清屏抗锯齿 + 锐化，抵消拉伸模糊 */
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  /* 轻微锐化滤镜，让边缘更清晰，不改变色彩 */
+  filter: contrast(1.02) saturate(1.05) sharpness(0.3);
 }
 
 /* ---------- 底部呼吸圆点 ---------- */
