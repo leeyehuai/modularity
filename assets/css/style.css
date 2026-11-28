@@ -469,6 +469,55 @@ html[data-theme="dark"] .brand-mark img {
 }
 .post-card:hover .arrow { transform: translateX(3px); }
 
+/* 热门笔记排行榜 */
+.hot-block {
+  margin: 6px 0 30px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--accent-soft), var(--bg-elev) 65%);
+  box-shadow: var(--shadow-sm);
+}
+.hot-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.hot-head h2 { font-size: 16px; margin: 0; font-weight: 800; letter-spacing: -0.01em; }
+.hot-head .hint { font-size: 12px; color: var(--muted); }
+.hot-list { display: flex; flex-direction: column; }
+.hot-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 6px;
+  border-radius: 10px;
+  color: inherit;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.hot-item + .hot-item { border-top: 1px dashed var(--line-soft); }
+.hot-item:hover { background: var(--bg-soft); text-decoration: none; }
+.hot-rank { font-size: 16px; line-height: 1; width: 22px; text-align: center; flex-shrink: 0; }
+.hot-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+.hot-item:hover .hot-title { color: var(--accent); }
+.hot-count {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.article-meta .view-count { font-variant-numeric: tabular-nums; }
+
 /* 快捷删除按钮：默认隐藏在卡片右上角；hover 卡片时显现 */
 .card-quick-delete {
   position: absolute;

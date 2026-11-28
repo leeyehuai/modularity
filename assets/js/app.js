@@ -3,6 +3,7 @@
   'use strict';
 
   var FN = window.FNCommunity || null;
+  var VIEWS = window.FNViews || null;
 
   /* 合并内置文章 + 本机用户文章（用户文章按更新时间优先） */
   function buildPosts() {
@@ -206,6 +207,67 @@
     el.postCount.textContent = String(POSTS.length);
   }
 
+  /* 阅读数：views.js 提供 fn-views 计数表，缺失时兜底为 0 */
+  function viewsOf(p) { return VIEWS ? VIEWS.getViews(p.slug) : 0; }
+
+  /* 热门笔记排行榜：按阅读数取前三 */
+  function renderHotList() {
+    if (!VIEWS) return '';
+    var top = VIEWS.topPosts(POSTS, 3);
+    /* 至少有一篇文章被读过才显示榜单，避免冷启动全 0 的尴尬 */
+    if (!top.length || viewsOf(top[0]) <= 0) return '';
+    var medals = ['🥇', '🥈', '🥉'];
+    var items = top.map(function (p, i) {
+      return '<a class="hot-item" href="#/post/' + esc(p.slug) + '">' +
+        '<span class="hot-rank">' + medals[i] + '</span>' +
+        '<span class="hot-title">' + esc(p.title) + '</span>' +
+        '<span class="hot-count">👁 ' + VIEWS.fmt(viewsOf(p)) + '</span>' +
+        '</a>';
+    }).join('');
+    return '<section class="hot-block" id="hotBlock">' +
+      '<div class="hot-head"><h2>🔥 热门笔记</h2><span class="hint">阅读量排行</span></div>' +
+      '<div class="hot-list">' + items + '</div></section>';
+  }
+
+  /* 局部刷新：只替换榜单块与卡片上的阅读数，不全量重渲染首页。
+     - storage 事件：其它标签页改了 fn-views → 触发
+     - visibilitychange：本标签页从后台切回前台 → 触发
+     - 仅在当前处于首页默认视图时才刷新，避免误触 */
+  function refreshHotList() {
+    var hash = location.hash.replace(/^#/, '') || '/';
+    if (hash !== '/' && hash !== '') return;
+    /* 有筛选（搜索/标签/门类）时不刷新，保持原视图 */
+    if (state.q || state.tag !== '全部' || state.major) return;
+
+    var block = document.getElementById('hotBlock');
+    var nextHtml = renderHotList();
+
+    if (!block && nextHtml) {
+      /* 冷启动后第一次有人读文章 → 在头条卡后插入榜单 */
+      var featured = el.view.querySelector('.post-card-featured');
+      if (featured) { featured.insertAdjacentHTML('afterend', nextHtml); }
+    } else if (block && nextHtml) {
+      /* 榜单已存在 → 仅当内容真正变化时才替换，避免每一次 storage 事件都重绘 */
+      if (block.outerHTML !== nextHtml) block.outerHTML = nextHtml;
+    } else if (block && !nextHtml) {
+      /* 极端情况：数据被清 → 移除空榜单 */
+      block.remove();
+    }
+
+    /* 同步刷新卡片角落的阅读数（不依赖榜单是否存在） */
+    el.view.querySelectorAll('.post-card[data-slug]').forEach(function (card) {
+      var slug = card.getAttribute('data-slug');
+      var p = bySlug(slug);
+      if (!p) return;
+      var meta = card.querySelector('.card-meta');
+      if (!meta) return;
+      var base = meta.getAttribute('data-base-date') || meta.textContent.split(' · ')[0];
+      meta.setAttribute('data-base-date', base);
+      var v = viewsOf(p);
+      meta.textContent = v > 0 ? base + ' · 👁 ' + VIEWS.fmt(v) : base;
+    });
+  }
+
   /* ---------------- home ---------------- */
   function matches(p) {
     if (state.tag !== '全部' && p.tags.indexOf(state.tag) === -1) return false;
@@ -281,6 +343,8 @@
       if (!state.q && state.tag === '全部' && !state.major && featured) {
         var p = featured;
         html += renderPostCard(p, true);
+        /* 热门笔记排行榜：默认视图（无搜索 / 无标签 / 无门类筛选）才出现 */
+        html += renderHotList();
       }
       var rest = (!state.q && state.tag === '全部' && !state.major) ? list.slice(1) : list;
       if (rest.length) {
@@ -333,7 +397,7 @@
     /* 取消首页快捷删除按钮：删除入口统一收归到「我的编辑」弹窗 */
     return '<div class="' + cls + '" data-slug="' + esc(p.slug) + '">' +
       '<div class="card-top">' + head +
-      '<span class="card-meta">' + fmtDate(p.date) + '</span></div>' +
+      '<span class="card-meta">' + fmtDate(p.date) + (viewsOf(p) > 0 ? ' · 👁 ' + VIEWS.fmt(viewsOf(p)) : '') + '</span></div>' +
       '<h3>' + esc(p.title) + '</h3>' +
       '<p>' + esc(p.desc) + '</p>' +
       '<div class="card-foot"><span>' + tags + '</span>' + arrow + '</div>' +
@@ -435,6 +499,9 @@
     var post = bySlug(slug);
     if (!post) return renderNotFound();
 
+    /* 阅读计数：同一浏览器会话内同一篇只计一次，避免刷新刷量 */
+    var viewCount = VIEWS ? VIEWS.incrViews(slug) : 0;
+
     renderSidebar(slug);
     var idx = indexOfPost(slug);
     var prev = POSTS[idx + 1] || null;
@@ -449,6 +516,7 @@
       '<h1>' + esc(post.title) + '</h1>' +
       '<div class="article-meta"><span>' + fmtDate(post.date) + '</span>' +
       '<span class="dot"></span><span>' + post.minutes + ' 分钟阅读</span>' +
+      '<span class="dot"></span><span class="view-count">👁 ' + viewCount + ' 次阅读</span>' +
       (post.author ? '<span class="dot"></span><span class="author-chip">✍ ' + esc(post.author) + (isMine(post) ? '（我）' : '') + '</span>' : '') +
       '</div>' +
       '<div class="tag-row">' + post.tags.map(function (t) {
@@ -1058,6 +1126,16 @@
   window.addEventListener('resize', function () {
     if (window.innerWidth > 1024) closeMenu();
     updateProgress();
+  });
+
+  /* ---------------- 实时榜单刷新 ---------------- */
+  /* 1) 跨标签页：别的标签页读文章改了 fn-views → 本页即时重排 */
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'fn-views') refreshHotList();
+  });
+  /* 2) 切回前台：从其它窗口/标签切回本页 → 核对一次最新数据 */
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') refreshHotList();
   });
 
   /* ---------------- boot ---------------- */
