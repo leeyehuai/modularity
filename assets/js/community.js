@@ -188,11 +188,19 @@
   /* ---------------- 远端 API ---------------- */
   async function api(path, options) {
     if (!API_BASE) throw new Error('no-api');
-    var res = await fetch(API_BASE + path, {
-      headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders(), (options.headers || {})),
-      method: options.method || 'GET',
-      body: options.body ? JSON.stringify(options.body) : undefined
-    });
+    var res;
+    try {
+      res = await fetch(API_BASE + path, {
+        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders(), (options.headers || {})),
+        method: options.method || 'GET',
+        body: options.body ? JSON.stringify(options.body) : undefined
+      });
+    } catch (netErr) {
+      /* 网络层失败（Worker 连不上 / DNS / CORS）：打标记，供调用方区分「离线降级」 */
+      var ne = new Error('network-error');
+      ne.network = true;
+      throw ne;
+    }
     var data = await res.json().catch(function () { return {}; });
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     return data;
@@ -248,9 +256,10 @@
         applySession(data.username, email, data.token, remember);
         return data;
       } catch (e) {
-        /* 远端返回 409「昵称已被占用」时，可能是同一用户在另一台设备注册过，
-           这里不吞错，直接把错误抛给前端让用户知道；其他错误才降级 */
-        if (e && e.message && e.message.indexOf('已被占用') !== -1) throw e;
+        /* 只有「Worker 连不上」（no-api / network-error）才允许本地降级注册；
+           其余一切（昵称占用 / 验证码错 / 限流 / 业务拒绝）都抛给用户。 */
+        if (!(e && (e.network || e.message === 'no-api'))) throw e;
+        /* 走到这里 = 远端不可达，允许本地降级 */
       }
     }
 
@@ -295,8 +304,10 @@
         applySession(data.username, acc, data.token, remember);
         return data;
       } catch (e) {
-        /* 远端返回「昵称或密码错误」时不降级到本地，直接抛 */
-        if (e && e.message && (e.message.indexOf('密码') !== -1 || e.message.indexOf('昵称') !== -1)) throw e;
+        /* 只有「Worker 连不上」（no-api / network-error）才允许降级到本地登录；
+           其余一切（账号密码错 / 验证码错 / 限流 / 业务拒绝）都抛给用户，绝不降级。 */
+        if (!(e && (e.network || e.message === 'no-api'))) throw e;
+        /* 走到这里 = 远端不可达，允许本地降级 */
       }
     }
 
