@@ -15,6 +15,10 @@
     if (guest) {
       document.documentElement.setAttribute('data-soft-enter', '1');
     }
+    /* 从 auth.html 登录成功跳回来：直接隐藏封面，不渲染 */
+    if (/[?&]from=auth/.test(location.search)) {
+      document.documentElement.setAttribute('data-skip-splash', '1');
+    }
   } catch (e) {}
 })();
 </script>
