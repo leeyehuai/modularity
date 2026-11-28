@@ -14,6 +14,15 @@
 (function () {
   'use strict';
 
+  /* 只读模式（?guest=1）：直接跳过整个封面流程，不播视频 */
+  if (/[?&]guest=1/.test(location.search)) {
+    var skipSplash = document.getElementById('splash');
+    if (skipSplash && skipSplash.parentNode) {
+      skipSplash.parentNode.removeChild(skipSplash);
+    }
+    return;
+  }
+
   var splash = document.getElementById('splash');
   if (!splash) return;
 
@@ -78,4 +87,6 @@
   } else {
     setTimeout(route, 1200);
   }
+
+  /* 统一体验：无论是否从 auth.html 登录成功跳回来，都完整播放封面后再分流 */
 })();
