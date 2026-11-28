@@ -30,8 +30,9 @@
     if (el && el.parentNode) el.parentNode.removeChild(el);
   }
 
-  /* —— 会话内已播过：所有情况都直接跳过 —— */
-  if (alreadyShown()) {
+  /* —— 会话内已播过 / 登录跳回 / 只读模式：所有情况都直接跳过 —— */
+  if (alreadyShown() || /[?&]from=auth/.test(location.search) || /[?&]guest=1/.test(location.search)) {
+    markShown(); /* 打标，后续刷新也不播 */
     removeSplashSilently();
     return;
   }
