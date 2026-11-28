@@ -35,6 +35,18 @@ html[data-soft-enter="1"] body {
   display: block;
 }
 
+/* 盖掉视频右下角的"豆包"AI 生成水印（白色半透明字 + 深色竖条） */
+.splash::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18%;
+  height: 16%;
+  background: #f5f1ea;
+  z-index: 1;
+}
+
 /* ---------- 底部呼吸圆点 ---------- */
 .splash-loading {
   position: absolute;
