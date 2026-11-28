@@ -4,7 +4,6 @@
 <title>模块学习 · MODULARITY</title>
 <meta name="description" content="模块学习 MODULARITY —— 关于 CSS 布局、JavaScript 原理、网络缓存、TypeScript 与工程化实践的深度笔记。">
 <link rel="icon" href="assets/images/logo.png">
-<link rel="preload" as="video" href="assets/video/splash.mp4" type="video/mp4">
 <link rel="stylesheet" href="assets/css/style.css?v=18">
 <link rel="stylesheet" href="assets/css/splash.css?v=16">
 <script>
@@ -23,7 +22,7 @@
 <body>
 <!-- 启动封面：每次进入页面都播放 MP4 翻书动画，播完后由 splash.js 根据登录状态分流 -->
 <div class="splash" id="splash" aria-hidden="true">
-  <video class="splash-video" id="splashVideo" src="assets/video/splash.mp4" muted playsinline preload="auto" autoplay poster="assets/images/logo.png"></video>
+  <video class="splash-video" id="splashVideo" src="assets/video/splash.mp4" muted playsinline preload="auto"></video>
   <div class="splash-loading" aria-hidden="true">
     <span class="dot"></span><span class="dot"></span><span class="dot"></span>
     <span class="txt">正在唤醒模块</span>

@@ -62,27 +62,17 @@
 
   if (video) {
     video.addEventListener('ended', onEnded);
-
-    /* 优化首帧延迟：不等元数据，立刻尝试播放，元数据到了再调倍速 */
-    video.muted = true;  // 必须静音才能自动播放
-    video.playbackRate = 2.2;  // 提前设置倍速，不等元数据
-
-    var p = video.play();
-    if (p && p.catch) {
-      p.catch(function () {
-        /* 自动播放被拦：等用户交互后再播 */
-        video.addEventListener('pointerdown', function once() {
-          video.removeEventListener('pointerdown', once);
-          video.play().catch(function () {});
-        });
-      });
-    }
-
-    /* 元数据加载完后，确保倍速生效（有些浏览器要等这个事件） */
     video.addEventListener('loadedmetadata', function () {
+      /* 2.2x 加速播放：8s 视频压缩到约 3.6s，翻书动作更利落自然 */
       video.playbackRate = 2.2;
+      /* 浏览器自动播放尝试 */
+      var p = video.play();
+      if (p && p.catch) p.catch(function () {
+        /* 自动播放被拦：再试一次静音播放 */
+        video.muted = true;
+        video.play().catch(function () {});
+      });
     });
-
     /* 兜底：4 秒后无论视频状态都分流 */
     setTimeout(onEnded, VIDEO_DURATION_FALLBACK);
   } else {
