@@ -8,11 +8,15 @@
   function buildPosts() {
     var builtin = (window.POSTS || []).slice();
     var user = FN ? FN.loadPosts() : [];
-    return builtin.concat(user).sort(function (a, b) {
+    var all = builtin.concat(user).sort(function (a, b) {
       var ta = (a.updatedAt || 0), tb = (b.updatedAt || 0);
       if (tb !== ta) return tb - ta;
       return a.date < b.date ? 1 : -1;
     });
+    /* 过滤掉已软删除（在回收站）的文章 */
+    var trashSlugs = {};
+    loadTrash().forEach(function (p) { trashSlugs[p.slug] = true; });
+    return all.filter(function (p) { return !trashSlugs[p.slug]; });
   }
 
   var POSTS = buildPosts();
@@ -29,6 +33,43 @@
     progress: document.getElementById('progressBar'),
     footerBuild: document.getElementById('footerBuild')
   };
+
+  /* ---------------- 回收站（软删除） ---------------- */
+  var LS_TRASH = 'fn-trash';
+  function loadTrash() {
+    try {
+      var arr = JSON.parse(localStorage.getItem(LS_TRASH) || '[]');
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveTrash(arr) {
+    try { localStorage.setItem(LS_TRASH, JSON.stringify(arr)); } catch (e) {}
+  }
+  function pushToTrash(post) {
+    var arr = loadTrash();
+    /* 去重：同 slug 已存在则先移除再推入 */
+    arr = arr.filter(function (p) { return p.slug !== post.slug; });
+    arr.unshift({
+      slug: post.slug, title: post.title, desc: post.desc,
+      major: post.major, category: post.category, tags: post.tags,
+      date: post.date, minutes: post.minutes, content: post.content,
+      deletedAt: Date.now()
+    });
+    saveTrash(arr);
+    updateTrashBadge();
+  }
+  function removeFromTrash(slug) {
+    var arr = loadTrash().filter(function (p) { return p.slug !== slug; });
+    saveTrash(arr);
+    updateTrashBadge();
+  }
+  function updateTrashBadge() {
+    var badge = document.getElementById('trashBadge');
+    if (!badge) return;
+    var n = loadTrash().length;
+    badge.textContent = String(n);
+    badge.hidden = n === 0;
+  }
 
   var state = { tag: '全部', q: '', major: '' };
   /* 门类（一级分类）：工科 / 英语 / 数学 / 编程语言。
@@ -289,11 +330,8 @@
       : '<span class="cat-badge">' + esc(majorOf(p)) + ' · ' + esc(p.category) + '</span>';
     var tags = p.tags.slice(0, featured ? 3 : 2).map(function (t) { return '#' + esc(t); }).join(' ');
     var arrow = featured ? '<span class="arrow">阅读全文 →</span>' : '<span class="arrow">→</span>';
-    var quickDelete = isMine(p)
-      ? '<button type="button" class="card-quick-delete" data-slug="' + esc(p.slug) + '" title="快捷删除本文">🗑</button>'
-      : '';
+    /* 取消首页快捷删除按钮：删除入口统一收归到「我的编辑」弹窗 */
     return '<div class="' + cls + '" data-slug="' + esc(p.slug) + '">' +
-      quickDelete +
       '<div class="card-top">' + head +
       '<span class="card-meta">' + fmtDate(p.date) + '</span></div>' +
       '<h3>' + esc(p.title) + '</h3>' +
@@ -306,19 +344,21 @@
   function bindQuickDeleteGestures() {
     var cards = el.view.querySelectorAll('.card-quick-delete');
     cards.forEach(function (btn) {
-      /* 点击删除按钮：直接删除，不弹确认框 */
-      btn.addEventListener('click', async function (e) {
+      /* 点击删除按钮：软删除 → 移入回收站，不弹确认框 */
+      btn.addEventListener('click', function (e) {
         e.stopPropagation();
         var slug = btn.getAttribute('data-slug');
         var post = bySlug(slug);
         if (!post) return;
-        try {
-          await FN.removePost(post);
-          refreshPosts();
-          renderHome(true);
-        } catch (err) {
-          window.alert('删除失败：' + (err && err.message ? err.message : err));
-        }
+        /* 1) 把文章序列化存入回收站（完整保留内容，可恢复） */
+        pushToTrash(post);
+        /* 2) 重新构建列表（自动过滤回收站文章）并刷新 */
+        POSTS = buildPosts();
+        refreshPosts();
+        renderHome(true);
+        showSyncToast('已移入回收站，可在顶部垃圾桶中恢复或永久删除', '查看回收站', function () {
+          location.hash = '#/trash';
+        });
       });
     });
 
@@ -592,6 +632,91 @@
     resetScroll();
   }
 
+  /* ---------------- 回收站视图 ---------------- */
+  function renderTrash() {
+    renderSidebar(null);
+    var trash = loadTrash();
+    var html = '<div class="article-layout"><article>' +
+      '<div class="breadcrumb"><a href="#/">首页</a><span class="sep">/</span><span>回收站</span></div>' +
+      '<header class="article-head"><span class="cat-badge">Trash</span>' +
+      '<h1>回收站</h1>' +
+      '<div class="article-meta"><span>存放已删除的文章</span><span class="dot"></span>' +
+      '<span>' + trash.length + ' 篇</span></div></header>' +
+      '<div class="prose">';
+    if (trash.length === 0) {
+      html += '<div class="trash-empty">回收站是空的。<br>删除的文章会先到这里，点右侧 × 才会永久删除。</div>';
+    } else {
+      html += '<p style="color:var(--muted);font-size:13px;margin:0 0 16px">删除的文章会先移入这里，不会立即消失。<b>恢复</b> = 放回原位置；点 <b>×</b> 弹确认框，<b>确认</b> = 永久删除不可恢复，<b>取消</b> = 暂时保留在回收站。</p>';
+      trash.forEach(function (p) {
+        var delDate = p.deletedAt ? new Date(p.deletedAt).toLocaleString('zh-CN') : '';
+        html += '<div class="trash-item">' +
+          '<div class="trash-item-info">' +
+            '<div class="trash-item-title">' + esc(p.title) + '</div>' +
+            '<div class="trash-item-meta">删除于 ' + delDate + ' · ' + esc(p.category || p.major || '') + '</div>' +
+          '</div>' +
+          '<button class="trash-item-restore" type="button" title="恢复到原位置" data-slug="' + esc(p.slug) + '">↩ 恢复</button>' +
+          '<button class="trash-item-del" type="button" title="永久删除，不可恢复" data-slug="' + esc(p.slug) + '">×</button>' +
+        '</div>';
+      });
+    }
+    html += '</div></article><aside class="toc"></aside></div>';
+    el.view.innerHTML = html;
+    document.title = '回收站 · 模块笔记';
+    resetScroll();
+
+    /* 绑定「恢复」按钮：从回收站移除 → 文章回原列表 */
+    el.view.querySelectorAll('.trash-item-restore').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var slug = btn.getAttribute('data-slug');
+        removeFromTrash(slug);
+        POSTS = buildPosts();
+        refreshPosts();
+        renderHome(true);
+        showSyncToast('已恢复文章到原位置', '查看', function () {
+          location.hash = '#/post/' + encodeURIComponent(slug);
+        });
+      });
+    });
+
+    /* 绑定「永久删除」按钮：先展开内联确认条；确认=永久删除，取消=保留 */
+    el.view.querySelectorAll('.trash-item-del').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var itemEl = btn.closest('.trash-item');
+        var slug = btn.getAttribute('data-slug');
+        var title = itemEl.querySelector('.trash-item-title').textContent || '';
+
+        /* 已展开确认条 → 忽略，避免重复 */
+        if (itemEl.querySelector('.trash-confirm')) return;
+
+        /* 折叠其它已展开的确认条 */
+        el.view.querySelectorAll('.trash-confirm').forEach(function (c) { c.remove(); });
+
+        /* 原地插入内联确认条 */
+        var bar = document.createElement('div');
+        bar.className = 'trash-confirm';
+        bar.innerHTML =
+          '<span class="trash-confirm-text">确定永久删除《' + esc(title) + '》？此操作不可恢复。</span>' +
+          '<button type="button" class="trash-confirm-yes">确认删除</button>' +
+          '<button type="button" class="trash-confirm-no">取消</button>';
+        itemEl.appendChild(bar);
+
+        /* 取消：收起确认条，文章保留 */
+        bar.querySelector('.trash-confirm-no').addEventListener('click', function () {
+          bar.remove();
+        });
+        /* 确认：真正永久删除 */
+        bar.querySelector('.trash-confirm-yes').addEventListener('click', function () {
+          var item = loadTrash().find(function (p) { return p.slug === slug; });
+          if (FN && FN.removePost && item) {
+            try { FN.removePost(item); } catch (e) {}
+          }
+          removeFromTrash(slug);
+          renderTrash();
+        });
+      });
+    });
+  }
+
   /* ---------------- not found ---------------- */
   function renderNotFound() {
     renderSidebar(null);
@@ -634,6 +759,7 @@
     closeMenu();
     if (hash === '/' || hash === '') return renderHome();
     if (hash === '/about') return renderAbout();
+    if (hash === '/trash') return renderTrash();
     var m = hash.match(/^\/post\/(.+)$/);
     if (m) return renderArticle(decodeURIComponent(m[1]));
     return renderNotFound();
@@ -671,6 +797,34 @@
   var transBtn = document.getElementById('transBtn');
   if (transBtn && window.FNTranslator) {
     transBtn.addEventListener('click', function () { window.FNTranslator.open(); });
+  }
+
+  /* 回收站：顶栏垃圾桶按钮 → 跳转回收站视图 */
+  var trashBtn = document.getElementById('trashBtn');
+  if (trashBtn) {
+    trashBtn.addEventListener('click', function () { location.hash = '#/trash'; });
+  }
+  updateTrashBadge();
+
+  /* 返回键：顶栏 ← → 返回上一个界面 */
+  var backBtn = document.getElementById('backBtn');
+  if (backBtn) {
+    backBtn.addEventListener('click', function () {
+      /* 若浏览器有历史记录则回退；无历史则回首页 */
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        location.hash = '#/';
+      }
+    });
+  }
+
+  /* 前进键：顶栏 → → 前进到下一个界面（位于返回键右侧） */
+  var forwardBtn = document.getElementById('forwardBtn');
+  if (forwardBtn) {
+    forwardBtn.addEventListener('click', function () {
+      window.history.forward();
+    });
   }
 
   /* 游客模式：URL 带 ?guest=1，只允许浏览，不能编辑 */
@@ -816,14 +970,14 @@
           }
         });
       } else if (act === 'del') {
-        if (!window.confirm('确定删除《' + (post.title || '') + '》？此操作不可恢复。')) return;
-        FN.removePost(post).then(function () {
-          refreshPosts();
-          renderList();
-          route();
-          var stateI = mask.querySelector('#myState');
-          if (stateI) stateI.textContent = '已删除 · 剩余 ' + myPosts().length + ' 篇';
-        });
+        /* 快捷删除：不询问，直接移入回收站 */
+        pushToTrash(post);
+        POSTS = buildPosts();
+        refreshPosts();
+        renderList();
+        route();
+        var stateI = mask.querySelector('#myState');
+        if (stateI) stateI.textContent = '已移入回收站 · 剩余 ' + myPosts().length + ' 篇';
       }
     });
 

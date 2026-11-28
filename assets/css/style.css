@@ -1102,6 +1102,97 @@ html[data-theme="dark"] .tok-at  { color: #ffab70; }
 .btn:active { transform: translateY(1px); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+
+/* ---------- 回收站 ---------- */
+.trash-badge {
+  position: absolute;
+  top: 2px; right: 0px;
+  min-width: 16px; height: 16px;
+  padding: 0 4px;
+  border-radius: 99px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+}
+.icon-btn { position: relative; }
+.trash-item {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--bg-elev);
+  margin-bottom: 10px;
+}
+.trash-item-info { flex: 1; min-width: 0; }
+.trash-item-title { font-weight: 650; font-size: 15px; color: var(--text); }
+.trash-item-meta { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
+.trash-item-del {
+  width: 30px; height: 30px;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(229, 72, 77, 0.1);
+  color: #e5484d;
+  font-size: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.trash-item-del:hover { background: #e5484d; color: #fff; }
+.trash-item-restore {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.trash-item-restore:hover { background: var(--accent-soft); border-color: var(--accent); }
+.trash-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--muted);
+}
+.trash-confirm {
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(229, 72, 77, 0.08);
+  border: 1px solid rgba(229, 72, 77, 0.3);
+}
+.trash-confirm-text { flex: 1; font-size: 13px; color: var(--text-2); }
+.trash-confirm-yes {
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #e5484d;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.trash-confirm-no {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg-elev);
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.trash-confirm-no:hover { background: var(--bg-soft); }
 .btn.ghost { background: transparent; }
 .btn.ghost.danger { color: #e0524d; border-color: rgba(224,82,77,.35); }
 .btn.sm { padding: 6px 12px; font-size: 12.5px; }
@@ -1379,11 +1470,12 @@ html[data-theme="dark"] .tok-at  { color: #ffab70; }
 .anno-toolbar {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  bottom: 0;
   transform: translateX(-50%);
   background: var(--bg-elev);
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-bottom: none;
+  border-radius: 16px 16px 0 0;
   padding: 8px 14px 10px;
   box-shadow: var(--shadow-lg);
   z-index: 1000;
@@ -1391,6 +1483,18 @@ html[data-theme="dark"] .tok-at  { color: #ffab70; }
   flex-direction: column;
   gap: 6px;
   max-width: 92vw;
+  touch-action: none;
+}
+/* 拖拽手柄（标题栏区域）：长按任意位置均可拖动 */
+.anno-toolbar.anno-dragging {
+  user-select: none;
+  box-shadow: 0 18px 50px -12px rgba(16, 24, 40, 0.35);
+}
+.anno-tb-head {
+  cursor: grab;
+}
+.anno-tb-head:active {
+  cursor: grabbing;
 }
 .anno-tb-head {
   display: flex;

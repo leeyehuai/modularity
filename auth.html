@@ -122,6 +122,13 @@
     text-decoration: none;
   }
   .auth-back:hover { color: var(--accent); }
+
+  /* 登录/注册成功 → 整页柔和淡出转场，再跳主界面 */
+  body.auth-leaving { transition: opacity .45s ease; opacity: 0; }
+  body.auth-leaving .auth-card { animation: authOut .45s ease forwards; }
+  @keyframes authOut {
+    to { opacity: 0; transform: translateY(-14px) scale(.97); }
+  }
 </style>
 </head>
 <body>
@@ -258,7 +265,10 @@
         await FNCommunity.login(account, pwdL, !!fd.get('remember'));
       }
       stateI.textContent = '✓ 成功，正在进入主界面…';
-      setTimeout(function () { window.location.replace('./'); }, 450);
+      /* 触发整页淡出转场（约 450ms）后再跳主界面；
+         带 ?from=auth 让 splash 跳过完整动画、直接淡出进主界面 */
+      document.body.classList.add('auth-leaving');
+      setTimeout(function () { window.location.replace('./?from=auth'); }, 480);
     } catch (err) {
       stateI.textContent = '⚠ ' + (err && err.message ? err.message : err);
     }

@@ -327,6 +327,60 @@
       }
       setActiveTool(tool);
     });
+
+    /* ---------------- 批注栏拖拽（左键长按任意位置均可拖动） ---------------- */
+    (function enableDrag() {
+      var dragging = false;
+      var startX = 0, startY = 0;
+      var baseLeft = 0, baseTop = 0;
+      var moved = false;
+
+      bar.addEventListener('pointerdown', function (e) {
+        /* 仅左键触发；点在按钮/输入控件上不启动拖拽，避免干扰工具操作 */
+        if (e.button !== 0) return;
+        if (e.target.closest('button, input, textarea, a')) return;
+        dragging = true;
+        moved = false;
+        bar.classList.add('anno-dragging');
+        bar.setPointerCapture(e.pointerId);
+        /* 记录当前视口坐标：若已被拖离默认位，读取当前 left/top；否则用默认居中底位 */
+        var rect = bar.getBoundingClientRect();
+        startX = e.clientX;
+        startY = e.clientY;
+        baseLeft = rect.left;
+        baseTop = rect.top;
+        /* 取消默认 transform 居中定位，改为绝对坐标 */
+        bar.style.transform = 'none';
+        bar.style.left = baseLeft + 'px';
+        bar.style.top = baseTop + 'px';
+        bar.style.bottom = 'auto';
+        e.preventDefault();
+      });
+
+      bar.addEventListener('pointermove', function (e) {
+        if (!dragging) return;
+        var dx = e.clientX - startX;
+        var dy = e.clientY - startY;
+        if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
+        var newLeft = baseLeft + dx;
+        var newTop = baseTop + dy;
+        /* 边界约束：不允许拖出视口 */
+        var bw = bar.offsetWidth, bh = bar.offsetHeight;
+        newLeft = Math.min(Math.max(newLeft, 0), window.innerWidth - bw);
+        newTop = Math.min(Math.max(newTop, 0), window.innerHeight - bh);
+        bar.style.left = newLeft + 'px';
+        bar.style.top = newTop + 'px';
+      });
+
+      function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        bar.classList.remove('anno-dragging');
+        try { bar.releasePointerCapture(e.pointerId); } catch (err) {}
+      }
+      bar.addEventListener('pointerup', endDrag);
+      bar.addEventListener('pointercancel', endDrag);
+    })();
   }
 
   /* 点击"完成"：询问是否保存，是则保留批注，否则清空 */
