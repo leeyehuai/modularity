@@ -17,6 +17,12 @@
   var splash = document.getElementById('splash');
   if (!splash) return;
 
+  /* 从 auth.html 登录成功跳回来（?from=auth）：直接移除封面，不播视频 */
+  if (/[?&]from=auth/.test(location.search)) {
+    splash.parentNode.removeChild(splash);
+    return;
+  }
+
   var video = document.getElementById('splashVideo');
 
   function readSession() {
@@ -77,10 +83,5 @@
     setTimeout(onEnded, VIDEO_DURATION_FALLBACK);
   } else {
     setTimeout(route, 1200);
-  }
-
-  /* 从 auth.html 登录成功跳回来（?from=auth）：跳过播放，直接淡出进主界面 */
-  if (/[?&]from=auth/.test(location.search)) {
-    setTimeout(dismiss, 300);
   }
 })();

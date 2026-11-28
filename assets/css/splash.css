@@ -2,7 +2,7 @@
  * 启动封面 Splash v6 —— 直接播放原 MP4 视频，1:1 复刻动画
  * ========================================================== */
 
-body:has(.splash) { background: #f7f1e6; }
+body:has(.splash) { background: #e8e4e0; }
 
 html[data-soft-enter="1"] body {
   animation: softEnter .75s cubic-bezier(.22,.8,.3,1) both;
@@ -20,8 +20,8 @@ html[data-soft-enter="1"] body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 跟视频底色一致的浅米白，避免视频加载闪黑 */
-  background: #f5f1ea;
+  /* 跟视频实际背景色一致的浅灰白 */
+  background: #e8e4e0;
   opacity: 1;
 }
 
@@ -41,8 +41,8 @@ html[data-soft-enter="1"] body {
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 16%;
-  height: 12%;
+  width: 15%;
+  height: 10%;
   background: #e8e4e0;
   z-index: 1;
 }
