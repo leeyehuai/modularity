@@ -2,9 +2,9 @@
  * 启动封面 Splash v6 —— 直接播放原 MP4 视频，1:1 复刻动画
  * ========================================================== */
 
-body:has(.splash) { background: #f0ebe6; }
+body:has(.splash) { background: #f7f1e6; }
 
-/* 从 auth.html 登录成功跳回来：直接隐藏封面 */
+/* 只读模式（?guest=1）：不播封面，直接进主界面 */
 html[data-skip-splash="1"] .splash { display: none; }
 
 html[data-soft-enter="1"] body {
@@ -23,8 +23,8 @@ html[data-soft-enter="1"] body {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 跟视频实际背景色一致的暖调浅粉灰白 */
-  background: #f0ebe6;
+  /* 跟视频底色一致的浅米白，避免视频加载闪黑 */
+  background: #f5f1ea;
   opacity: 1;
 }
 
@@ -36,19 +36,6 @@ html[data-soft-enter="1"] body {
   height: 100%;
   object-fit: cover;
   display: block;
-}
-
-/* 盖掉视频右下角的"豆包"AI 生成水印（白色半透明字） */
-.splash::after {
-  content: '';
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 15%;
-  height: 10%;
-  background: rgba(232, 228, 224, 0.85);
-  backdrop-filter: blur(2px);
-  z-index: 1;
 }
 
 /* ---------- 底部呼吸圆点 ---------- */
