@@ -46,7 +46,8 @@ html[data-soft-enter="1"] body {
   bottom: 0;
   width: 15%;
   height: 10%;
-  background: #f0ebe6;
+  background: rgba(232, 228, 224, 0.85);
+  backdrop-filter: blur(2px);
   z-index: 1;
 }
 
