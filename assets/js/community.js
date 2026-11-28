@@ -202,7 +202,12 @@
       throw ne;
     }
     var data = await res.json().catch(function () { return {}; });
-    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    if (!res.ok) {
+      var err = new Error(data.error || ('HTTP ' + res.status));
+      /* 调试：记录非 200 响应的真实状态，帮助定位问题 */
+      console.warn('[api]', path, 'HTTP', res.status, data);
+      throw err;
+    }
     return data;
   }
 
@@ -230,9 +235,11 @@
     try {
       await api('/api/posts');
       state.usingRemote = true;
+      console.warn('[pingRemote] Worker 可达');
       return true;
     } catch (e) {
       state.usingRemote = false;
+      console.warn('[pingRemote] Worker 不可达，降级模式。错误:', e && e.message, 'network:', e && e.network);
       return false;
     }
   }
@@ -314,14 +321,18 @@
         applySession(data.username, acc, data.token, remember);
         return data;
       } catch (e) {
-        /* 只有「Worker 连不上」（no-api / network-error）才允许降级到本地登录；
-           其余一切（账号密码错 / 验证码错 / 限流 / 业务拒绝）都抛给用户，绝不降级。 */
+        /* 安全收紧：远端可达时，任何错误（包括验证码错/密码错/限流）
+           都绝不降级到本地登录——直接抛给用户处理。
+           只有「Worker 网络连不上」才允许本地降级模式。 */
+        console.warn('[login] 远端调用失败，错误类型:', e && e.message, 'network标记:', e && e.network);
         if (!(e && (e.network || e.message === 'no-api'))) throw e;
         /* 走到这里 = 远端不可达，允许本地降级 */
+        console.warn('[login] 判定为网络错误，降级到本地登录');
       }
     }
 
     /* 远端不可达或临时网络错：回退到本地账号表 */
+    console.warn('[login] 走本地降级登录路径');
     var hit = await localLogin(acc, password);
     applySession(hit.nickname, hit.email, 'local-' + Date.now(), remember);
     return { username: hit.nickname };
