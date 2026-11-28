@@ -31,6 +31,25 @@
     usingRemote: false
   };
 
+  /* ---------------- 验证码（服务端签发，答案不下发） ----------------
+   * 从 Worker GET /api/captcha 拉 SVG 图 + X-Captcha-Id 响应头。
+   * 返回 { url, id }：url 直接塞进 <img src>，id 随注册/登录一起提交。 */
+  var captchaCache = { url: '', id: '' };
+  async function fetchCaptcha() {
+    if (!API_BASE) return null;
+    try {
+      var res = await fetch(API_BASE + '/api/captcha', { headers: {} });
+      var id = res.headers.get('X-Captcha-Id') || '';
+      var blob = await res.blob();
+      /* 旧的 objectURL 释放，防止内存堆积 */
+      if (captchaCache.url) URL.revokeObjectURL(captchaCache.url);
+      captchaCache = { url: URL.createObjectURL(blob), id: id };
+      return captchaCache;
+    } catch (e) {
+      return null;
+    }
+  }
+
   /* ---------------- 本地身份（降级 + 缓存） ---------------- */
   function getProfile() {
     if (state.name) return { name: state.name };
@@ -210,14 +229,20 @@
     }
   }
 
-  async function register(nickname, email, password, remember) {
+  async function register(nickname, email, password, remember, captcha) {
     var name = nickname || email.split('@')[0];
     var remoteOk = await pingRemote();
 
     /* 远端优先：注册请求先打到 Worker */
     if (remoteOk) {
       try {
-        var data = await api('/api/register', { method: 'POST', body: { username: name, password: password } });
+        var body = { username: name, password: password };
+        /* 远端 Worker 强制验证码（captcha = { id, code }） */
+        if (captcha && captcha.id) {
+          body.captchaId = captcha.id;
+          body.captchaCode = captcha.code;
+        }
+        var data = await api('/api/register', { method: 'POST', body: body });
         /* 远端注册成功 → 顺手把本地账号表也写一份做离线兜底 */
         try { await localRegister(email, password, name); } catch (e) {}
         applySession(data.username, email, data.token, remember);
@@ -236,14 +261,19 @@
     return { username: state.name };
   }
 
-  async function login(account, password, remember) {
+  async function login(account, password, remember, captcha) {
     var acc = account.trim();
     var remoteOk = await pingRemote();
 
     /* 远端优先：远端通就用远端校验，保证跨设备同账号一致 */
     if (remoteOk) {
       try {
-        var data = await api('/api/login', { method: 'POST', body: { username: acc, password: password } });
+        var body = { username: acc, password: password };
+        if (captcha && captcha.id) {
+          body.captchaId = captcha.id;
+          body.captchaCode = captcha.code;
+        }
+        var data = await api('/api/login', { method: 'POST', body: body });
         /* 远端登录成功 → 本地账号表同步一份（首次跨设备时可能本地没有） */
         try {
           var localHit = localAccounts().find(function (a) {
@@ -429,17 +459,31 @@
   /* ---------------- 编辑器弹窗（含登录/注册） ---------------- */
   var EMAIL_RE = /^[\w.+-]+@[\w-]+(\.[\w-]+)+$/;
 
-  function makeCaptcha() {
-    /* 生成 4 位数字验证码作为人机验证 */
-    var code = '';
-    for (var i = 0; i < 4; i++) code += String(Math.floor(Math.random() * 10));
-    return code;
+  /* 验证码行模板：用 <img> 加载 Worker 签发的 SVG，答案不在前端出现 */
+  function captchaRowHtml() {
+    return '' +
+      '    <label class="ed-label">人机验证 * <span class="ed-hint">（输入右图数字，点击图片可刷新）</span></label>' +
+      '    <div class="cap-row">' +
+      '      <input class="ed-input cap-input" id="auCap" inputmode="numeric" maxlength="4" placeholder="4 位数字" autocomplete="off">' +
+      '      <img class="cap-img" id="auCapImg" title="点击刷新" alt="验证码" style="width:100px;height:40px;border-radius:8px;cursor:pointer;background:rgba(111,135,245,.08)">' +
+      '    </div>';
   }
 
   function openAuthModal(mode, onDone) {
     var mask = document.createElement('div');
     mask.className = 'ed-mask';
-    var captcha = makeCaptcha();
+    /* 当前验证码的签名 id（由 Worker 签发，随注册/登录一起提交） */
+    var captchaState = { id: '' };
+
+    /* 拉取验证码图并填充到 <img>，同时记下 captchaId */
+    async function refreshCaptcha() {
+      var img = mask.querySelector('#auCapImg');
+      var data = await fetchCaptcha();
+      if (data && img) {
+        img.src = data.url;
+        captchaState.id = data.id;
+      }
+    }
 
     function renderBody(innerMode, presetEmail) {
       if (innerMode === 'register') {
@@ -452,11 +496,7 @@
           '    <input class="ed-input" id="auPwd" type="password" maxlength="64" placeholder="至少 6 位" autocomplete="new-password">' +
           '    <label class="ed-label">确认密码 *</label>' +
           '    <input class="ed-input" id="auPwd2" type="password" maxlength="64" placeholder="再次输入密码" autocomplete="new-password">' +
-          '    <label class="ed-label">人机验证 * <span class="ed-hint">（请输入右图数字）</span></label>' +
-          '    <div class="cap-row">' +
-          '      <input class="ed-input cap-input" id="auCap" inputmode="numeric" maxlength="4" placeholder="4 位数字" autocomplete="off">' +
-          '      <span class="cap-img" id="auCapImg" title="点击刷新">' + esc(captcha) + '</span>' +
-          '    </div>' +
+          captchaRowHtml() +
           '    <label class="cap-check"><input type="checkbox" id="auRemember"> 自动登录（下次进入网站免输入）</label>' +
           '    <div class="ed-save-state" id="auState"></div>';
       }
@@ -466,11 +506,7 @@
           '    <input class="ed-input" id="auAccount" maxlength="64" placeholder="输入邮箱或昵称" autocomplete="username" value="' + esc(presetEmail || '') + '">' +
           '    <label class="ed-label">绑定邮箱 *</label>' +
           '    <input class="ed-input" id="auEmail" type="email" maxlength="64" placeholder="输入注册时使用的邮箱" autocomplete="email">' +
-          '    <label class="ed-label">人机验证 * <span class="ed-hint">（请输入右图数字）</span></label>' +
-          '    <div class="cap-row">' +
-          '      <input class="ed-input cap-input" id="auCap" inputmode="numeric" maxlength="4" placeholder="4 位数字" autocomplete="off">' +
-          '      <span class="cap-img" id="auCapImg" title="点击刷新">' + esc(captcha) + '</span>' +
-          '    </div>' +
+          captchaRowHtml() +
           '    <label class="ed-label">新密码 *</label>' +
           '    <input class="ed-input" id="auPwd" type="password" maxlength="64" placeholder="至少 6 位" autocomplete="new-password">' +
           '    <label class="ed-label">确认新密码 *</label>' +
@@ -483,6 +519,7 @@
         '    <input class="ed-input" id="auAccount" maxlength="64" placeholder="输入邮箱或昵称" autocomplete="username" value="' + esc(presetEmail || '') + '">' +
         '    <label class="ed-label">密码 *</label>' +
         '    <input class="ed-input" id="auPwd" type="password" maxlength="64" placeholder="输入密码" autocomplete="current-password">' +
+        captchaRowHtml() +
         '    <label class="cap-check"><input type="checkbox" id="auRemember"' + (presetEmail ? ' checked' : '') + '> 自动登录（下次进入网站免输入）</label>' +
         '    <div class="ed-save-state" id="auState"></div>' +
         '    <div class="auth-switch">' +
@@ -519,31 +556,38 @@
       var backBtn = innerMode === 'login' ? $('#auCancel') : $('#auBackLogin');
       if (backBtn) backBtn.addEventListener('click', function () { render('login'); });
 
-      /* 登录页：跳转注册 / 忘记密码 */
+      /* 登录页：跳转注册 / 忘记密码（切换模式时重新拉验证码图） */
       if (innerMode === 'login') {
         var goReg = $('#auGoReg');
-        if (goReg) goReg.addEventListener('click', function () { captcha = makeCaptcha(); render('register'); });
+        if (goReg) goReg.addEventListener('click', function () { render('register'); });
         var goForgot = $('#auGoForgot');
-        if (goForgot) goForgot.addEventListener('click', function () { captcha = makeCaptcha(); render('forgot'); });
+        if (goForgot) goForgot.addEventListener('click', function () { render('forgot'); });
 
         $('#auOk').addEventListener('click', async function () {
           var account = $('#auAccount').value.trim();
           var pwd = $('#auPwd').value;
+          var cap = $('#auCap').value.trim();
           var stateI = $('#auState');
           if (!account) { stateI.textContent = '⚠ 请输入邮箱或昵称'; return; }
           if (!pwd) { stateI.textContent = '⚠ 请输入密码'; return; }
+          if (!cap) { stateI.textContent = '⚠ 请输入右侧验证码'; return; }
           stateI.textContent = '登录中…';
           try {
-            await login(account, pwd, $('#auRemember').checked);
+            await login(account, pwd, $('#auRemember').checked, { id: captchaState.id, code: cap });
             close();
             if (onDone) onDone(true);
           } catch (e) {
+            /* 验证码错/限流时自动刷新验证码图，方便用户重试 */
+            if (e && e.message && (e.message.indexOf('验证码') !== -1 || e.message.indexOf('频繁') !== -1)) {
+              refreshCaptcha();
+              $('#auCap').value = '';
+            }
             stateI.textContent = '⚠ ' + e.message;
           }
         });
       } else if (innerMode === 'register') {
         var capImg = $('#auCapImg');
-        capImg.addEventListener('click', function () { captcha = makeCaptcha(); capImg.textContent = captcha; });
+        capImg.addEventListener('click', function () { refreshCaptcha(); });
         $('#auOk').addEventListener('click', async function () {
           var email = $('#auEmail').value.trim();
           var nick = $('#auNick').value.trim();
@@ -555,20 +599,24 @@
           if (nick.length < 2 || nick.length > 24) { stateI.textContent = '⚠ 昵称需为 2-24 位'; return; }
           if (pwd.length < 6) { stateI.textContent = '⚠ 密码至少 6 位'; return; }
           if (pwd !== pwd2) { stateI.textContent = '⚠ 两次输入的密码不一致'; return; }
-          if (cap !== captcha) { stateI.textContent = '⚠ 验证码不正确，点击图片可刷新'; return; }
+          if (!cap) { stateI.textContent = '⚠ 请输入右侧验证码'; return; }
           stateI.textContent = '注册中…';
           try {
-            await register(nick, email, pwd, $('#auRemember').checked);
+            await register(nick, email, pwd, $('#auRemember').checked, { id: captchaState.id, code: cap });
             close();
             if (onDone) onDone(true);
           } catch (e) {
+            if (e && e.message && (e.message.indexOf('验证码') !== -1 || e.message.indexOf('频繁') !== -1)) {
+              refreshCaptcha();
+              $('#auCap').value = '';
+            }
             stateI.textContent = '⚠ ' + e.message;
           }
         });
       } else {
         /* forgot */
         var capImgF = $('#auCapImg');
-        capImgF.addEventListener('click', function () { captcha = makeCaptcha(); capImgF.textContent = captcha; });
+        capImgF.addEventListener('click', function () { refreshCaptcha(); });
         $('#auOk').addEventListener('click', async function () {
           var account = $('#auAccount').value.trim();
           var email = $('#auEmail').value.trim();
@@ -594,6 +642,9 @@
           }
         });
       }
+
+      /* 每次渲染完，拉一张新的服务端验证码图 */
+      refreshCaptcha();
     }
 
     function esc(s) {
