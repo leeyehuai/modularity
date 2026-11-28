@@ -4,8 +4,6 @@
 
 body:has(.splash) { background: #f7f1e6; }
 
-html[data-skip-splash="1"] .splash { display: none; }
-
 html[data-soft-enter="1"] body {
   animation: softEnter .75s cubic-bezier(.22,.8,.3,1) both;
 }

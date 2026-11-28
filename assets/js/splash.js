@@ -79,8 +79,5 @@
     setTimeout(route, 1200);
   }
 
-  /* 从 auth.html 登录成功回来（?from=auth）：跳过播放，直接淡出 */
-  if (/[?&]from=auth/.test(location.search)) {
-    setTimeout(dismiss, 500);
-  }
+  /* 统一体验：无论是否从 auth.html 登录成功跳回来，都完整播放封面后再分流 */
 })();
