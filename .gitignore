@@ -1,0 +1,12 @@
+# ---- Cloudflare Worker 后端（走 wrangler 部署，不上传 Pages） ----
+worker/
+
+# ---- 本地工具 / 临时文件（不公开） ----
+_preview_server.js
+_server_tmp.js
+.trae-html-share-packages/
+.screenshots/
+
+# ---- 系统 ----
+.DS_Store
+Thumbs.db
