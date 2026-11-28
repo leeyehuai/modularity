@@ -1,28 +1,42 @@
-/* 启动封面编排 v6 —— 直接播放视频，播完后分流
+/* 启动封面编排 v7 —— 每次浏览器会话只播一次
  * ---------------------------------------------------------------
- * 打开 index.html
- *   ↓
- * 播放 splash.mp4（约 8s），静音自动播放
- *   ↓
- * 视频播完 → 静态停留 2 秒
- *   ↓
- * 判断状态：
- *   - 已登录              → 淡出封面，进主界面
- *   - 游客（?guest=1）    → 淡出封面，只读主界面
- *   - 未登录              → 跳 auth.html
+ * 规则：
+ *   - 会话内首次打开 index.html        → 播一次封面，播完后 sessionStorage 打标
+ *   - 登录/注册成功 ?from=auth        → 已播过，直接进主界面（不再播）
+ *   - 只读模式 ?guest=1               → 已播过，直接进主界面（不再播）
+ *   - 会话内刷新/F5                    → 已播过，直接进主界面（不再播）
+ *   - 关闭浏览器标签/窗口后重新打开   → sessionStorage 清空，重新播一次
  * --------------------------------------------------------------- */
 (function () {
   'use strict';
 
-  /* 只读模式（?guest=1）：直接跳过整个封面流程，不播视频 */
-  if (/[?&]guest=1/.test(location.search)) {
-    var skipSplash = document.getElementById('splash');
-    if (skipSplash && skipSplash.parentNode) {
-      skipSplash.parentNode.removeChild(skipSplash);
-    }
+  var SPLASH_KEY = 'fn-splash-shown';
+
+  /* 判断本会话是否已经播过封面 */
+  function alreadyShown() {
+    try {
+      return sessionStorage.getItem(SPLASH_KEY) === '1';
+    } catch (e) { return false; }
+  }
+
+  /* 标记本会话已播过封面 */
+  function markShown() {
+    try { sessionStorage.setItem(SPLASH_KEY, '1'); } catch (e) {}
+  }
+
+  /* 静默移除封面元素（不播视频） */
+  function removeSplashSilently() {
+    var el = document.getElementById('splash');
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  /* —— 会话内已播过：所有情况都直接跳过 —— */
+  if (alreadyShown()) {
+    removeSplashSilently();
     return;
   }
 
+  /* —— 本会话首次播封面 —— */
   var splash = document.getElementById('splash');
   if (!splash) return;
 
@@ -37,6 +51,7 @@
   }
 
   function dismiss() {
+    markShown(); /* 播完打标，会话内不再播 */
     splash.classList.add('splash-out');
     setTimeout(function () {
       if (splash.parentNode) splash.parentNode.removeChild(splash);
@@ -51,8 +66,8 @@
         return;
       }
       if (!readSession()) {
-        /* 未登录：不淡出封面，直接在封面层上跳转 auth.html，
-           避免主界面先露脸、跳转后又跳走的“卡一下主界面”闪烁 */
+        /* 未登录：直接跳 auth.html（封面层不淡出） */
+        markShown(); /* 跳转也算播过，auth.html 登录成功跳回来不再播 */
         window.location.replace('auth.html');
         return;
       }
@@ -60,33 +75,22 @@
     }, 900);
   }
 
-  /* 优先监听视频播完事件；兜底时间 = 目标 3.6s（8s 视频 × 2.2x 加速），留 0.4s 余量 */
-  var VIDEO_DURATION_FALLBACK = 4000;
-  var settled = false;
-  function onEnded() {
-    if (settled) return;
-    settled = true;
-    route();
-  }
-
   if (video) {
-    video.addEventListener('ended', onEnded);
+    video.addEventListener('ended', function onEnded() {
+      video.removeEventListener('ended', onEnded);
+      route();
+    });
     video.addEventListener('loadedmetadata', function () {
-      /* 2.2x 加速播放：8s 视频压缩到约 3.6s，翻书动作更利落自然 */
       video.playbackRate = 2.2;
-      /* 浏览器自动播放尝试 */
       var p = video.play();
       if (p && p.catch) p.catch(function () {
-        /* 自动播放被拦：再试一次静音播放 */
         video.muted = true;
         video.play().catch(function () {});
       });
     });
     /* 兜底：4 秒后无论视频状态都分流 */
-    setTimeout(onEnded, VIDEO_DURATION_FALLBACK);
+    setTimeout(route, 4000);
   } else {
     setTimeout(route, 1200);
   }
-
-  /* 统一体验：无论是否从 auth.html 登录成功跳回来，都完整播放封面后再分流 */
 })();
